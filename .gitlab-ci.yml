@@ -1,0 +1,40 @@
+image: 
+  name: laravel-container:latest
+  pull_policy: if-not-present
+  entrypoint: ["/bin/bash", "-l", "-c"]
+
+stages:
+  - Test
+  - Build
+  - Deploy
+
+cache:
+  paths:
+    - node_modules/
+    - vendor/
+
+1. Installing composer packages:
+  stage: Test
+  script:
+    - cp constants/AppConstant.example.php constants/AppConstant.php
+    - sed -i -e 's/AppConstantExample/AppConstant/g' constants/AppConstant.php
+    - composer update --no-interaction --prefer-dist --optimize-autoloader
+
+2. Migrating Database and Running Tests:
+  stage: Test
+  needs:
+    - 1. Installing composer packages
+  script:
+    - service postgresql start
+    - cp .env.example .env
+    - cp constants/AppConstant.example.php constants/AppConstant.php
+    - sed -i -e 's/AppConstantExample/AppConstant/g' constants/AppConstant.php
+    - php artisan key:generate
+    - sudo -u postgres psql -U postgres -c "CREATE DATABASE schedule;";
+    - sudo -u postgres psql -U postgres -c "ALTER USER postgres WITH PASSWORD 'password';"
+    - sudo -u postgres psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE schedule TO postgres;"
+    - php artisan migrate
+    - php artisan passport:keys --force
+    - php artisan passport:client --personal --name=users
+    - php artisan db:seed
+    # - ./vendor/bin/pest --ci
