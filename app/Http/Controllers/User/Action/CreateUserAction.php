@@ -132,8 +132,8 @@ trait CreateUserAction {
                     'phone' => $user->phone ?? null,
                 ];
 
-                $sendCredentialsService = app(SendCredentialsService::class);
-                $sendCredentialsService->send($credentials, $language, OtpMethod::EMAIL);
+               // $sendCredentialsService = app(SendCredentialsService::class);
+                //$sendCredentialsService->send($credentials, $language, OtpMethod::EMAIL);
             }
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

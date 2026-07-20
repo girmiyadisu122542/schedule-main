@@ -63,6 +63,19 @@ class English extends Lang {
             'supplier' => 'Supplier',
             'employee' => 'Employee',
 
+            'configurations' => 'Configurations',
+            'collegesOrSchools' => 'Colleges/Schools',
+            'departments' => 'Departments',
+            'instructors' => 'Instructors',
+            'classes' => 'Classes',
+            'courses' => 'Courses',
+            'rooms' => 'Rooms',
+            'scheduling' => 'Scheduling',
+            'classSchedules' => 'Class Schedules',
+            'examSchedules' => 'Exam Schedules',
+            'reports' => 'Reports',
+            'notifications' => 'Notifications',
+
             //subscription and pricing related items
         ];
     }

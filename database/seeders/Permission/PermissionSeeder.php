@@ -43,6 +43,9 @@ class PermissionSeeder extends Seeder {
             PERMISSION_GROUP_PROFILE_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_PROFILE_MANAGEMENT)->first(),
             PERMISSION_GROUP_DYNAMIC_VALUE_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_DYNAMIC_VALUE_MANAGEMENT)->first(),
             PERMISSION_GROUP_CLASS_SCHEDULE_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_CLASS_SCHEDULE_MANAGEMENT)->first(),
+            PERMISSION_GROUP_MASTER_DATA_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_MASTER_DATA_MANAGEMENT)->first(),
+            PERMISSION_GROUP_REPORT_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_REPORT_MANAGEMENT)->first(),
+            PERMISSION_GROUP_NOTIFICATION_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_NOTIFICATION_MANAGEMENT)->first(),
         ];
 
         $missingGroups = array_keys(array_filter($permissionGroups, fn ($group) => $group === null));
@@ -107,6 +110,51 @@ class PermissionSeeder extends Seeder {
                 PERMISSION_UPDATE_CLASS_SCHEDULE,
                 PERMISSION_DELETE_CLASS_SCHEDULE,
                 PERMISSION_CHANGE_CLASS_SCHEDULE_STATE,
+                PERMISSION_SEE_EXAM_SCHEDULE,
+                PERMISSION_CREATE_EXAM_SCHEDULE,
+                PERMISSION_UPDATE_EXAM_SCHEDULE,
+                PERMISSION_DELETE_EXAM_SCHEDULE,
+                PERMISSION_CHANGE_EXAM_SCHEDULE_STATE,
+            ],
+            PERMISSION_GROUP_MASTER_DATA_MANAGEMENT => [
+                PERMISSION_SEE_COLLEGE,
+                PERMISSION_CREATE_COLLEGE,
+                PERMISSION_UPDATE_COLLEGE,
+                PERMISSION_DELETE_COLLEGE,
+                PERMISSION_CHANGE_COLLEGE_STATUS,
+                PERMISSION_SEE_DEPARTMENT,
+                PERMISSION_CREATE_DEPARTMENT,
+                PERMISSION_UPDATE_DEPARTMENT,
+                PERMISSION_DELETE_DEPARTMENT,
+                PERMISSION_CHANGE_DEPARTMENT_STATUS,
+                PERMISSION_SEE_INSTRUCTOR,
+                PERMISSION_CREATE_INSTRUCTOR,
+                PERMISSION_UPDATE_INSTRUCTOR,
+                PERMISSION_DELETE_INSTRUCTOR,
+                PERMISSION_CHANGE_INSTRUCTOR_STATUS,
+                PERMISSION_SEE_CLASS,
+                PERMISSION_CREATE_CLASS,
+                PERMISSION_UPDATE_CLASS,
+                PERMISSION_DELETE_CLASS,
+                PERMISSION_CHANGE_CLASS_STATUS,
+                PERMISSION_SEE_COURSE,
+                PERMISSION_CREATE_COURSE,
+                PERMISSION_UPDATE_COURSE,
+                PERMISSION_DELETE_COURSE,
+                PERMISSION_CHANGE_COURSE_STATUS,
+                PERMISSION_SEE_ROOM,
+                PERMISSION_CREATE_ROOM,
+                PERMISSION_UPDATE_ROOM,
+                PERMISSION_DELETE_ROOM,
+                PERMISSION_CHANGE_ROOM_STATUS,
+            ],
+            PERMISSION_GROUP_REPORT_MANAGEMENT => [
+                PERMISSION_SEE_REPORT,
+                PERMISSION_EXPORT_REPORT,
+            ],
+            PERMISSION_GROUP_NOTIFICATION_MANAGEMENT => [
+                PERMISSION_SEE_NOTIFICATION,
+                PERMISSION_CHANGE_NOTIFICATION_STATUS,
             ],
         ];
 
@@ -165,12 +213,69 @@ class PermissionSeeder extends Seeder {
             ['name' => 'Change Dynamic Value State', 'key' => PERMISSION_CHANGE_DYNAMIC_VALUE_STATE, 'allowed_roles' => [$superAdminRole]],
             ['name' => 'Entity Add Dynamic Value', 'key' => PERMISSION_ENTITY_ADD_DYNAMIC_VALUE, 'allowed_roles' => [$superAdminRole]],
 
-            // class / exam schedule management (sample feature)
+            // class schedule management (sample feature)
             ['name' => 'See Class Schedule', 'key' => PERMISSION_SEE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
             ['name' => 'Create Class Schedule', 'key' => PERMISSION_CREATE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Update Class Schedule', 'key' => PERMISSION_UPDATE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Delete Class Schedule', 'key' => PERMISSION_DELETE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Change Class Schedule State', 'key' => PERMISSION_CHANGE_CLASS_SCHEDULE_STATE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // exam schedule management
+            ['name' => 'See Exam Schedule', 'key' => PERMISSION_SEE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create Exam Schedule', 'key' => PERMISSION_CREATE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Exam Schedule', 'key' => PERMISSION_UPDATE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete Exam Schedule', 'key' => PERMISSION_DELETE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change Exam Schedule State', 'key' => PERMISSION_CHANGE_EXAM_SCHEDULE_STATE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // master data: colleges / schools
+            ['name' => 'See College', 'key' => PERMISSION_SEE_COLLEGE, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create College', 'key' => PERMISSION_CREATE_COLLEGE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update College', 'key' => PERMISSION_UPDATE_COLLEGE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete College', 'key' => PERMISSION_DELETE_COLLEGE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change College Status', 'key' => PERMISSION_CHANGE_COLLEGE_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // master data: departments
+            ['name' => 'See Department', 'key' => PERMISSION_SEE_DEPARTMENT, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create Department', 'key' => PERMISSION_CREATE_DEPARTMENT, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Department', 'key' => PERMISSION_UPDATE_DEPARTMENT, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete Department', 'key' => PERMISSION_DELETE_DEPARTMENT, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change Department Status', 'key' => PERMISSION_CHANGE_DEPARTMENT_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // master data: instructors
+            ['name' => 'See Instructor', 'key' => PERMISSION_SEE_INSTRUCTOR, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create Instructor', 'key' => PERMISSION_CREATE_INSTRUCTOR, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Instructor', 'key' => PERMISSION_UPDATE_INSTRUCTOR, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete Instructor', 'key' => PERMISSION_DELETE_INSTRUCTOR, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change Instructor Status', 'key' => PERMISSION_CHANGE_INSTRUCTOR_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // master data: classes
+            ['name' => 'See Class', 'key' => PERMISSION_SEE_CLASS, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create Class', 'key' => PERMISSION_CREATE_CLASS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Class', 'key' => PERMISSION_UPDATE_CLASS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete Class', 'key' => PERMISSION_DELETE_CLASS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change Class Status', 'key' => PERMISSION_CHANGE_CLASS_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // master data: courses
+            ['name' => 'See Course', 'key' => PERMISSION_SEE_COURSE, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create Course', 'key' => PERMISSION_CREATE_COURSE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Course', 'key' => PERMISSION_UPDATE_COURSE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete Course', 'key' => PERMISSION_DELETE_COURSE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change Course Status', 'key' => PERMISSION_CHANGE_COURSE_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // master data: rooms
+            ['name' => 'See Room', 'key' => PERMISSION_SEE_ROOM, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Create Room', 'key' => PERMISSION_CREATE_ROOM, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Room', 'key' => PERMISSION_UPDATE_ROOM, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Delete Room', 'key' => PERMISSION_DELETE_ROOM, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Change Room Status', 'key' => PERMISSION_CHANGE_ROOM_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // report management
+            ['name' => 'See Report', 'key' => PERMISSION_SEE_REPORT, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Export Report', 'key' => PERMISSION_EXPORT_REPORT, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // notification management
+            ['name' => 'See Notification', 'key' => PERMISSION_SEE_NOTIFICATION, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'Change Notification Status', 'key' => PERMISSION_CHANGE_NOTIFICATION_STATUS, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
         ];
 
         try {

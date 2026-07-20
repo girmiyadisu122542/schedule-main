@@ -28,4 +28,20 @@ class FrontendPaths {
 
     // Lookup (dynamic value) related routes
     public const MANAGE_DYNAMIC_VALUES = self::ADMIN_PREFIX . '/dynamic-values';
+
+    // Master data (academic resources) routes
+    public const COLLEGES = '/colleges';
+    public const DEPARTMENTS = '/departments';
+    public const INSTRUCTORS = '/instructors';
+    public const CLASSES = '/classes';
+    public const COURSES = '/courses';
+    public const ROOMS = '/rooms';
+
+    // Scheduling routes
+    public const CLASS_SCHEDULES = '/scheduling/classes';
+    public const EXAM_SCHEDULES = '/scheduling/exams';
+
+    // Reporting & notification routes
+    public const REPORTS = '/reports';
+    public const NOTIFICATIONS = '/notifications';
 }

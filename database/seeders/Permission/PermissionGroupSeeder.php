@@ -71,6 +71,27 @@ class PermissionGroupSeeder extends Seeder {
                 'is_group' => false,
                 'parent_code' => null,
             ],
+            [
+                'name' => 'Master Data Management',
+                'code' => PERMISSION_GROUP_MASTER_DATA_MANAGEMENT,
+                'level' => PERMISSION_GROUP_DEFAULT_LEVEL,
+                'is_group' => false,
+                'parent_code' => null,
+            ],
+            [
+                'name' => 'Report Management',
+                'code' => PERMISSION_GROUP_REPORT_MANAGEMENT,
+                'level' => PERMISSION_GROUP_DEFAULT_LEVEL,
+                'is_group' => false,
+                'parent_code' => null,
+            ],
+            [
+                'name' => 'Notification Management',
+                'code' => PERMISSION_GROUP_NOTIFICATION_MANAGEMENT,
+                'level' => PERMISSION_GROUP_DEFAULT_LEVEL,
+                'is_group' => false,
+                'parent_code' => null,
+            ],
         ];
 
         try {

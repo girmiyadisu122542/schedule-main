@@ -65,6 +65,18 @@ class Amharic extends Lang {
             'supplier' => 'አቅራቢ',
             'employee' => 'ሰራተኛ',
 
+            'configurations'    => 'ማዋቀሪያዎች',
+            'collegesOrSchools' => 'ኮሌጆች/ትምህርት ቤቶች',
+            'departments'       => 'ዲፓርትመንቶች',
+            'instructors'       => 'አስተማሪዎች',
+            'classes'           => 'ክፍሎች',
+            'courses'           => 'ኮርሶች',
+            'rooms'             => 'የመማሪያ ክፍሎች',
+            'scheduling'        => 'ፕሮግራም ማውጣት',
+            'classSchedules'    => 'የክፍል ፕሮግራሞች',
+            'examSchedules'     => 'የፈተና ፕሮግራሞች',
+            'reports'           => 'ሪፖርቶች',
+            'notifications'     => 'ማሳወቂያዎች',
             // subscription and pricing related items
         ];
     }

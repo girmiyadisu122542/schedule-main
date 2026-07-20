@@ -118,6 +118,9 @@ define('PERMISSION_GROUP_ROLE_PERMISSION_MANAGEMENT', 'role_permission_managemen
 define('PERMISSION_GROUP_PROFILE_MANAGEMENT', 'profile_management');
 define('PERMISSION_GROUP_DYNAMIC_VALUE_MANAGEMENT', 'dynamic_value_management');
 define('PERMISSION_GROUP_CLASS_SCHEDULE_MANAGEMENT', 'class_schedule_management');
+define('PERMISSION_GROUP_MASTER_DATA_MANAGEMENT', 'master_data_management');
+define('PERMISSION_GROUP_REPORT_MANAGEMENT', 'report_management');
+define('PERMISSION_GROUP_NOTIFICATION_MANAGEMENT', 'notification_management');
 
 define('DEFAULT_PER_PAGE', 50);
 define('PER_PAGE_KEY', 'limit');
