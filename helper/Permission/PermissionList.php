@@ -51,12 +51,69 @@ define('PERMISSION_ENTITY_ADD_ROLE', 'entity:add:role');
 define('PERMISSION_SEE_PROFILE', 'see:profile');
 define('PERMISSION_UPDATE_PROFILE', 'update:profile');
 
-// Class / Exam Schedule Related (sample feature)
+// Class Schedule Related (sample feature)
 define('PERMISSION_SEE_CLASS_SCHEDULE', 'see:class:schedule');
 define('PERMISSION_CREATE_CLASS_SCHEDULE', 'create:class:schedule');
 define('PERMISSION_UPDATE_CLASS_SCHEDULE', 'update:class:schedule');
 define('PERMISSION_DELETE_CLASS_SCHEDULE', 'delete:class:schedule');
 define('PERMISSION_CHANGE_CLASS_SCHEDULE_STATE', 'change:class:schedule:state');
+
+// Exam Schedule Related
+define('PERMISSION_SEE_EXAM_SCHEDULE', 'see:exam:schedule');
+define('PERMISSION_CREATE_EXAM_SCHEDULE', 'create:exam:schedule');
+define('PERMISSION_UPDATE_EXAM_SCHEDULE', 'update:exam:schedule');
+define('PERMISSION_DELETE_EXAM_SCHEDULE', 'delete:exam:schedule');
+define('PERMISSION_CHANGE_EXAM_SCHEDULE_STATE', 'change:exam:schedule:state');
+
+/** Master Data: College / School Related */
+define('PERMISSION_SEE_COLLEGE', 'see:college');
+define('PERMISSION_CREATE_COLLEGE', 'create:college');
+define('PERMISSION_UPDATE_COLLEGE', 'update:college');
+define('PERMISSION_DELETE_COLLEGE', 'delete:college');
+define('PERMISSION_CHANGE_COLLEGE_STATUS', 'change:college:status');
+
+/** Master Data: Department Related */
+define('PERMISSION_SEE_DEPARTMENT', 'see:department');
+define('PERMISSION_CREATE_DEPARTMENT', 'create:department');
+define('PERMISSION_UPDATE_DEPARTMENT', 'update:department');
+define('PERMISSION_DELETE_DEPARTMENT', 'delete:department');
+define('PERMISSION_CHANGE_DEPARTMENT_STATUS', 'change:department:status');
+
+/** Master Data: Instructor Related */
+define('PERMISSION_SEE_INSTRUCTOR', 'see:instructor');
+define('PERMISSION_CREATE_INSTRUCTOR', 'create:instructor');
+define('PERMISSION_UPDATE_INSTRUCTOR', 'update:instructor');
+define('PERMISSION_DELETE_INSTRUCTOR', 'delete:instructor');
+define('PERMISSION_CHANGE_INSTRUCTOR_STATUS', 'change:instructor:status');
+
+/** Master Data: Class Related */
+define('PERMISSION_SEE_CLASS', 'see:class');
+define('PERMISSION_CREATE_CLASS', 'create:class');
+define('PERMISSION_UPDATE_CLASS', 'update:class');
+define('PERMISSION_DELETE_CLASS', 'delete:class');
+define('PERMISSION_CHANGE_CLASS_STATUS', 'change:class:status');
+
+/** Master Data: Course Related */
+define('PERMISSION_SEE_COURSE', 'see:course');
+define('PERMISSION_CREATE_COURSE', 'create:course');
+define('PERMISSION_UPDATE_COURSE', 'update:course');
+define('PERMISSION_DELETE_COURSE', 'delete:course');
+define('PERMISSION_CHANGE_COURSE_STATUS', 'change:course:status');
+
+/** Master Data: Room Related */
+define('PERMISSION_SEE_ROOM', 'see:room');
+define('PERMISSION_CREATE_ROOM', 'create:room');
+define('PERMISSION_UPDATE_ROOM', 'update:room');
+define('PERMISSION_DELETE_ROOM', 'delete:room');
+define('PERMISSION_CHANGE_ROOM_STATUS', 'change:room:status');
+
+/** Report Related */
+define('PERMISSION_SEE_REPORT', 'see:report');
+define('PERMISSION_EXPORT_REPORT', 'export:report');
+
+/** Notification Related */
+define('PERMISSION_SEE_NOTIFICATION', 'see:notification');
+define('PERMISSION_CHANGE_NOTIFICATION_STATUS', 'change:notification:status');
 
 // Dynamic Value Related
 define('PERMISSION_SEE_DYNAMIC_VALUE', 'see:dynamic:value');
