@@ -1,19 +1,38 @@
 <?php
 
+use App\Http\Controllers\AcademicYear\AcademicYearController;
 use App\Http\Controllers\Auth\DeviceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\TwoFactorController;
+use App\Http\Controllers\Building\BuildingController;
+use App\Http\Controllers\Campus\CampusController;
+use App\Http\Controllers\College\CollegeController;
 use App\Http\Controllers\Constant\ConstantsIndexController;
+use App\Http\Controllers\Course\CourseController;
+use App\Http\Controllers\CourseOffering\CourseOfferingController;
+use App\Http\Controllers\Dashboard\DashboardController;
+use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\File\FileController;
+use App\Http\Controllers\Instructor\InstructorController;
+use App\Http\Controllers\Invigilation\ExamInvigilatorAssignmentController;
+use App\Http\Controllers\Invigilation\InvigilatorAvailabilityController;
 use App\Http\Controllers\Lang\LanguageController;
 use App\Http\Controllers\Lookup\LookupTransitionController;
 use App\Http\Controllers\Lookup\LookupTypeController;
 use App\Http\Controllers\Lookup\LookupValueController;
 use App\Http\Controllers\Permission\PermissionController;
 use App\Http\Controllers\Permission\PermissionGroupController;
+use App\Http\Controllers\Program\ProgramController;
 use App\Http\Controllers\Role\RoleController;
+use App\Http\Controllers\Room\RoomController;
 use App\Http\Controllers\Schedule\ClassScheduleController;
+use App\Http\Controllers\Schedule\ClassScheduleGeneratorController;
+use App\Http\Controllers\Schedule\ExamScheduleController;
+use App\Http\Controllers\Schedule\ExamScheduleGeneratorController;
+use App\Http\Controllers\Schedule\ScheduleGenerationRunController;
+use App\Http\Controllers\Section\SectionController;
+use App\Http\Controllers\Semester\SemesterController;
 use App\Http\Controllers\User\AllowedRoutesController;
 use App\Http\Controllers\User\UserController;
 use Illuminate\Support\Facades\Route;
@@ -135,19 +154,136 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::delete('/delete/{permissionGroupId}', [PermissionGroupController::class, 'destroy']);
             });
 
-        Route::get('/constants/gender', [ConstantsIndexController::class, 'getGender']);
+        // Read-only aggregates for the landing screen.
+        Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
-        // Sample feature -- class & exam schedules
+        Route::get('/constants/gender', [ConstantsIndexController::class, 'getGender']);
+        Route::get('/constants/scheduling', [ConstantsIndexController::class, 'getScheduling']);
+
+        // Master data -- physical resources.
+        // ->parameters() renames the placeholder to {id} so Form Request
+        // authorize() can branch on $this->route('id'); the regex lets show()
+        // take a numeric id OR a uuid (see CLAUDE Sec. 10.18).
+        Route::apiResource('/campuses', CampusController::class)
+            ->parameters(['campuses' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/campuses/{id}/state', [CampusController::class, 'changeState']);
+
+        Route::apiResource('/buildings', BuildingController::class)
+            ->parameters(['buildings' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/buildings/{id}/state', [BuildingController::class, 'changeState']);
+
+        // Master data -- academic hierarchy
+        Route::apiResource('/colleges', CollegeController::class)
+            ->parameters(['colleges' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/colleges/{id}/state', [CollegeController::class, 'changeState']);
+
+        Route::apiResource('/departments', DepartmentController::class)
+            ->parameters(['departments' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/departments/{id}/state', [DepartmentController::class, 'changeState']);
+
+        // Academic years carry neither is_active nor state, so there is no
+        // /{id}/state route here (Final Schema.md Sec. 6).
+        Route::apiResource('/academic-years', AcademicYearController::class)
+            ->parameters(['academic-years' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+
+        Route::apiResource('/programs', ProgramController::class)
+            ->parameters(['programs' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/programs/{id}/state', [ProgramController::class, 'changeState']);
+
+        // Semesters have no is_active and no state — the only lifecycle move is
+        // change-status, guarded by lookup_transitions (Final Schema.md Sec. 7).
+        Route::apiResource('/semesters', SemesterController::class)
+            ->parameters(['semesters' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/semesters/{id}/change-status', [SemesterController::class, 'changeStatus']);
+
+        Route::apiResource('/sections', SectionController::class)
+            ->parameters(['sections' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/sections/{id}/state', [SectionController::class, 'changeState']);
+
+        Route::apiResource('/rooms', RoomController::class)
+            ->parameters(['rooms' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/rooms/{id}/state', [RoomController::class, 'changeState']);
+
+        // Catalogue & people
+        Route::apiResource('/courses', CourseController::class)
+            ->parameters(['courses' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/courses/{id}/state', [CourseController::class, 'changeState']);
+
+        Route::apiResource('/instructors', InstructorController::class)
+            ->parameters(['instructors' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/instructors/{id}/state', [InstructorController::class, 'changeState']);
+
+        // Offering & approval. A workflow table: no /{id}/state route — the
+        // status moves through submit and the approval trail, both guarded by
+        // lookup_transitions (Final Schema.md Sec. 12).
+        Route::apiResource('/offerings', CourseOfferingController::class)
+            ->parameters(['offerings' => 'id'])
+            ->where(['id' => '[A-Za-z0-9-]+']);
+        Route::post('/offerings/{id}/submit', [CourseOfferingController::class, 'submit']);
+        Route::post('/offerings/{id}/change-status', [CourseOfferingController::class, 'changeStatus']);
+        // The four-tier trail: one append-only row per decision, which also
+        // moves the offering's status (Final Schema.md Sec. 13).
+        Route::post('/offerings/{id}/approval', [CourseOfferingController::class, 'recordApproval']);
+
+        // Class scheduling. No /{id}/state route: `state` is the
+        // conflict-liveness flag and only ever moves with the status, through
+        // publish or cancel (Final Schema.md Sec. 14).
         Route::prefix('/schedule')
             ->group(function () {
-                Route::get('/class-schedules', [ClassScheduleController::class, 'index']);
-                Route::post('/class-schedules', [ClassScheduleController::class, 'store']);
-                // Lookup by numeric id OR uuid — see ClassScheduleController::show().
-                Route::get('/class-schedules/{key}', [ClassScheduleController::class, 'show'])
-                    ->where('key', '[A-Za-z0-9-]+');
-                Route::put('/class-schedules/{id}', [ClassScheduleController::class, 'update']);
-                Route::delete('/class-schedules/{id}', [ClassScheduleController::class, 'destroy']);
-                Route::post('/class-schedules/{id}/state', [ClassScheduleController::class, 'changeState']);
+                Route::post('/generate-class', [ClassScheduleGeneratorController::class, 'generate']);
+
+                Route::apiResource('/class-schedules', ClassScheduleController::class)
+                    ->parameters(['class-schedules' => 'id'])
+                    ->where(['id' => '[A-Za-z0-9-]+']);
+                Route::post('/class-schedules/{id}/publish', [ClassScheduleController::class, 'publish']);
+                Route::post('/class-schedules/{id}/cancel', [ClassScheduleController::class, 'cancel']);
+
+                // Exam scheduling. Same shape as class scheduling, plus the
+                // optional department-confirmation step (Final Schema.md Sec. 15).
+                Route::post('/generate-exam', [ExamScheduleGeneratorController::class, 'generate']);
+
+                Route::apiResource('/exam-schedules', ExamScheduleController::class)
+                    ->parameters(['exam-schedules' => 'id'])
+                    ->where(['id' => '[A-Za-z0-9-]+']);
+                Route::post('/exam-schedules/{id}/confirm', [ExamScheduleController::class, 'confirm']);
+                Route::post('/exam-schedules/{id}/publish', [ExamScheduleController::class, 'publish']);
+                Route::post('/exam-schedules/{id}/cancel', [ExamScheduleController::class, 'cancel']);
+
+                // Run history — telemetry the progress UI polls.
+                Route::apiResource('/generation-runs', ScheduleGenerationRunController::class)
+                    ->only(['index', 'show'])
+                    ->parameters(['generation-runs' => 'id'])
+                    ->where(['id' => '[A-Za-z0-9-]+']);
+            });
+
+        // Invigilation. An availability window is a positive statement, not a
+        // record to revise — no update action, no state, no status
+        // (Final Schema.md Sec. 17).
+        Route::prefix('/invigilation')
+            ->group(function () {
+                Route::get('/availabilities', [InvigilatorAvailabilityController::class, 'index']);
+                Route::post('/availabilities', [InvigilatorAvailabilityController::class, 'store']);
+                Route::delete('/availabilities/{id}', [InvigilatorAvailabilityController::class, 'destroy']);
+
+                // Duties. No /{id}/state route: `state` is the conflict-liveness
+                // flag and moves only with the status — declining or being
+                // replaced frees the invigilator (Final Schema.md Sec. 18).
+                Route::post('/auto-assign', [ExamInvigilatorAssignmentController::class, 'autoAssign']);
+                Route::get('/assignments', [ExamInvigilatorAssignmentController::class, 'index']);
+                Route::post('/assignments', [ExamInvigilatorAssignmentController::class, 'store']);
+                Route::post('/assignments/{id}/respond', [ExamInvigilatorAssignmentController::class, 'respond']);
+                Route::post('/assignments/{id}/replace', [ExamInvigilatorAssignmentController::class, 'replace']);
             });
 
         // Lookup routes

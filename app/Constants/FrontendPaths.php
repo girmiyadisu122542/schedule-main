@@ -29,17 +29,58 @@ class FrontendPaths {
     // Lookup (dynamic value) related routes
     public const MANAGE_DYNAMIC_VALUES = self::ADMIN_PREFIX . '/dynamic-values';
 
+    // Master data (physical resources) routes
+    public const CAMPUSES = '/campuses';
+    public const BUILDINGS = '/buildings';
+
     // Master data (academic resources) routes
     public const COLLEGES = '/colleges';
     public const DEPARTMENTS = '/departments';
+    public const ACADEMIC_YEARS = '/academic-years';
+    public const PROGRAMS = '/programs';
+    public const SEMESTERS = '/semesters';
     public const INSTRUCTORS = '/instructors';
-    public const CLASSES = '/classes';
+    public const SECTIONS = '/sections';
     public const COURSES = '/courses';
     public const ROOMS = '/rooms';
+
+    /**
+     * Master data detail routes.
+     *
+     * Every list is paired with a `:uuid` page. Seeing the record is the same
+     * right as seeing the list, so each is gated on that entity's `see:` key
+     * alone (config/frontend_routes.php).
+     */
+    public const CAMPUS_DETAIL = '/campuses/:uuid';
+    public const BUILDING_DETAIL = '/buildings/:uuid';
+    public const COLLEGE_DETAIL = '/colleges/:uuid';
+    public const DEPARTMENT_DETAIL = '/departments/:uuid';
+    public const ACADEMIC_YEAR_DETAIL = '/academic-years/:uuid';
+    public const PROGRAM_DETAIL = '/programs/:uuid';
+    public const SEMESTER_DETAIL = '/semesters/:uuid';
+    public const INSTRUCTOR_DETAIL = '/instructors/:uuid';
+    public const SECTION_DETAIL = '/sections/:uuid';
+    public const COURSE_DETAIL = '/courses/:uuid';
+    public const ROOM_DETAIL = '/rooms/:uuid';
+
+    // Offering & approval routes
+    public const OFFERINGS = '/offerings';
+    public const OFFERING_DETAIL = '/offerings/:uuid';
 
     // Scheduling routes
     public const CLASS_SCHEDULES = '/scheduling/classes';
     public const EXAM_SCHEDULES = '/scheduling/exams';
+    public const CLASS_SCHEDULE_DETAIL = '/scheduling/classes/:uuid';
+    public const EXAM_SCHEDULE_DETAIL = '/scheduling/exams/:uuid';
+    public const GENERATION_RUN_DETAIL = '/scheduling/generation-runs/:uuid';
+
+    /** Invigilation */
+    public const INVIGILATOR_AVAILABILITIES = '/invigilation/availabilities';
+    public const INVIGILATOR_ASSIGNMENTS = '/invigilation/assignments';
+
+    /** Read-only published views */
+    public const TIMETABLE = '/timetable';
+    public const EXAM_CALENDAR = '/exam-calendar';
 
     // Reporting & notification routes
     public const REPORTS = '/reports';
