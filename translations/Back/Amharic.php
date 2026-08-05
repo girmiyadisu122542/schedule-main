@@ -19,6 +19,15 @@ class Amharic extends Lang {
         return [
             'male' => 'ወንድ',
             'female' => 'ሴት',
+
+            // Helper\Type\DayOfWeek
+            'monday' => 'ሰኞ',
+            'tuesday' => 'ማክሰኞ',
+            'wednesday' => 'ረቡዕ',
+            'thursday' => 'ሐሙስ',
+            'friday' => 'ዓርብ',
+            'saturday' => 'ቅዳሜ',
+            'sunday' => 'እሑድ',
             'countDifference' => 'የቆጠራ ልዩነት',
             'damage' => 'የተበላሸ',
             'loss' => 'የጠፋ',
