@@ -20,6 +20,16 @@ class English extends Lang {
             'male' => 'Male',
             'female' => 'Female',
 
+            // Helper\Type\DayOfWeek — `class_schedules.day_of_week` is a plain
+            // smallint, so its labels live here rather than in a lookup type.
+            'monday' => 'Monday',
+            'tuesday' => 'Tuesday',
+            'wednesday' => 'Wednesday',
+            'thursday' => 'Thursday',
+            'friday' => 'Friday',
+            'saturday' => 'Saturday',
+            'sunday' => 'Sunday',
+
             'countDifference' => 'Count Difference',
             'damage' => 'Damage',
             'loss' => 'Loss',

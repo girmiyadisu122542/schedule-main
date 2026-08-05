@@ -79,6 +79,13 @@ class PermissionGroupSeeder extends Seeder {
                 'parent_code' => null,
             ],
             [
+                'name' => 'Course Offering Management',
+                'code' => PERMISSION_GROUP_OFFERING_MANAGEMENT,
+                'level' => PERMISSION_GROUP_DEFAULT_LEVEL,
+                'is_group' => false,
+                'parent_code' => null,
+            ],
+            [
                 'name' => 'Report Management',
                 'code' => PERMISSION_GROUP_REPORT_MANAGEMENT,
                 'level' => PERMISSION_GROUP_DEFAULT_LEVEL,

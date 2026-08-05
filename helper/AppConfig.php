@@ -121,6 +121,7 @@ define('PERMISSION_GROUP_CLASS_SCHEDULE_MANAGEMENT', 'class_schedule_management'
 define('PERMISSION_GROUP_MASTER_DATA_MANAGEMENT', 'master_data_management');
 define('PERMISSION_GROUP_REPORT_MANAGEMENT', 'report_management');
 define('PERMISSION_GROUP_NOTIFICATION_MANAGEMENT', 'notification_management');
+define('PERMISSION_GROUP_OFFERING_MANAGEMENT', 'offering_management');
 
 define('DEFAULT_PER_PAGE', 50);
 define('PER_PAGE_KEY', 'limit');
@@ -197,6 +198,32 @@ define('ALLOWED_EMAIL_DOMAINS', [
 ]);
 
 define('MAX_EXCEL_SIZE', '2048');
+
+/**
+ * Scheduling master-data bounds. Every ceiling here mirrors a column width or
+ * a CHECK constraint in Docs/Schema/Final Schema.md — change the migration and
+ * the constant together, never one alone.
+ */
+define('MAX_CAMPUS_CODE_LENGTH', 20);   // campuses.code / buildings.code string(20)
+define('MAX_ROOM_CODE_LENGTH', 30);     // rooms.code / courses.code / programs.code string(30)
+define('MIN_BUILDING_FLOORS', -10);     // basements are honest (signed smallint)
+define('MAX_BUILDING_FLOORS', 200);
+define('MIN_PROGRAM_DURATION_YEARS', 1); // programs.duration_years CHECK 1..10
+define('MAX_PROGRAM_DURATION_YEARS', 10);
+define('MIN_SECTION_YEAR_LEVEL', 1);     // sections.year_level CHECK 1..10
+define('MAX_SECTION_YEAR_LEVEL', 10);
+define('MIN_SEMESTER_TERM', 1);          // semesters.term CHECK 1..3
+define('MAX_SEMESTER_TERM', 3);
+define('MAX_SECTION_LABEL_LENGTH', 10);  // sections.label string(10)
+define('MAX_SECTION_EXPECTED_STUDENTS', 10000);
+define('MAX_ROOM_CAPACITY', 10000);      // rooms.capacity / exam_capacity CHECK > 0
+define('MIN_COURSE_HOURS', 0.25);        // courses.credit_hours / contact_hours CHECK > 0
+define('MAX_COURSE_HOURS', 99.99);       // decimal(4,2) ceiling
+define('MAX_SESSIONS_PER_WEEK', 14);     // courses.sessions_per_week
+define('MAX_INSTRUCTOR_EMAIL_LENGTH', 150);
+define('MAX_ACADEMIC_RANK_LENGTH', 40);
+define('MAX_INSTRUCTOR_WEEKLY_HOURS', 999.99); // decimal(5,2) ceiling
+define('MAX_EXAM_INVIGILATORS', 20);     // exam_schedules.required_invigilators CHECK >= 1
 
 /** Localized Model attribute suffix */
 define('LOCALIZED_SUFFIX', '_localized');

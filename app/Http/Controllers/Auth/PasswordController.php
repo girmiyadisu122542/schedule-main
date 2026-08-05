@@ -45,7 +45,7 @@ class PasswordController extends Controller {
             return Response::_200(Message::get('email_will_be_sent'));
         }
 
-        $receiverName = $user->full_name__localized ?? $user->email;
+        $receiverName = $user->full_name__localized ?: $user->email;
 
         $response = OtpHelper::sendOtp(
             userId: $user->id,
@@ -199,7 +199,7 @@ class PasswordController extends Controller {
         }
 
         $otpType = (int) $request->type;
-        $receiverName = $user->full_name__localized ?? $user->email;
+        $receiverName = $user->full_name__localized ?: $user->email;
 
         $response = OtpHelper::sendOtp(
             userId: $user->id,

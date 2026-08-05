@@ -22,3 +22,15 @@ define('MODEL_USER_PERMISSION_OVERRIDE', 'user_permission_override');
 define('MODEL_LOOKUP_TYPE', 'lookup_type');
 define('MODEL_LOOKUP_VALUE', 'lookup_value');
 define('MODEL_LOOKUP_TRANSITION', 'lookup_transition');
+
+// Scheduling Models — the `applies_to_model` targets of the scheduling lookup types
+define('MODEL_PROGRAM', 'programs');
+define('MODEL_SEMESTER', 'semesters');
+define('MODEL_ROOM', 'rooms');
+define('MODEL_COURSE', 'courses');
+define('MODEL_COURSE_OFFERING', 'course_offerings');
+define('MODEL_COURSE_OFFERING_APPROVAL', 'course_offering_approvals');
+define('MODEL_CLASS_SCHEDULE', 'class_schedules');
+define('MODEL_EXAM_SCHEDULE', 'exam_schedules');
+define('MODEL_SCHEDULE_GENERATION_RUN', 'schedule_generation_runs');
+define('MODEL_EXAM_INVIGILATOR_ASSIGNMENT', 'exam_invigilator_assignments');

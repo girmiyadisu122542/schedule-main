@@ -3,12 +3,21 @@
 namespace App\Http\Requests\Schedule;
 
 use App\Constants\ScheduleConstant;
+use App\Models\Offering\CourseOffering;
+use App\Models\People\Instructor;
+use App\Models\Physical\Room;
+use App\Rules\LookupValueOfType;
 use Helper\Permission\PermissionAction;
-use Helper\Type\ScheduleType\ScheduleType;
-use Helper\Type\State\State;
 use Illuminate\Foundation\Http\FormRequest;
 use Translation\Message;
 
+/**
+ * Placing one class meeting, by hand or as a correction to a generated row.
+ *
+ * `semester_id` and `section_id` are NOT accepted from the client: the service
+ * mirrors them off the offering, and the composite foreign keys would reject
+ * anything else anyway.
+ */
 class ClassScheduleRequest extends FormRequest {
     use PermissionAction;
 
@@ -30,24 +39,17 @@ class ClassScheduleRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'name' => ['required', 'string', 'max:' . MAX_NAME_LENGTH],
-            'schedule_type' => ['required', 'integer', ScheduleType::ruleIn()],
+            'course_offering_id' => ['required', 'integer', 'exists:' . CourseOffering::getTableName() . ',id'],
+            'instructor_id' => ['nullable', 'integer', 'exists:' . Instructor::getTableName() . ',id'],
+            'room_id' => ['nullable', 'integer', 'exists:' . Room::getTableName() . ',id'],
+            'session_type_lookup_value_id' => ['nullable', 'integer', new LookupValueOfType(SESSION_TYPE, 'invalid_session_type')],
             'day_of_week' => [
-                'nullable',
-                'required_if:schedule_type,' . ScheduleConstant::TYPE_CLASS,
+                'required',
                 'integer',
                 'between:' . ScheduleConstant::DAY_MONDAY . ',' . ScheduleConstant::DAY_SUNDAY,
             ],
-            'exam_date' => [
-                'nullable',
-                'required_if:schedule_type,' . ScheduleConstant::TYPE_EXAM,
-                DATE_FORMAT_VALIDATION_KEY,
-            ],
             'start_time' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT],
             'end_time' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT, 'after:start_time'],
-            'room' => ['nullable', 'string', 'max:' . MAX_NAME_LENGTH],
-            'section' => ['nullable', 'string', 'max:' . MAX_NAME_LENGTH],
-            'state' => ['nullable', 'integer', State::ruleIn()],
         ];
     }
 
