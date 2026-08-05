@@ -2,43 +2,76 @@
 
 namespace App\Services\Schedule;
 
-use App\Constants\ScheduleConstant;
+use App\Models\Offering\CourseOffering;
+use App\Models\People\Instructor;
+use App\Models\Physical\Room;
 use App\Models\Schedule\ClassSchedule;
+use App\Services\Lookup\LookupService;
 use Constants\AppConstant;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Translation\Back\English;
 
 class ClassScheduleService {
 
     /**
-     * Create a class / exam schedule entry.
+     * Which conflict constraint maps to which error key. Clash detection is the
+     * database's job (three EXCLUDE constraints); this service's job is to turn
+     * the resulting QueryException back into something a user can read.
+     *
+     * @var array<string, string>
+     */
+    public const CONFLICT_KEYS = [
+        'cs_no_instructor_clash' => 'instructor_time_conflict',
+        'cs_no_room_clash' => 'room_time_conflict',
+        'cs_no_section_clash' => 'section_time_conflict',
+    ];
+
+    /**
+     * Place one class meeting by hand. It always starts at
+     * CLASS_SCHEDULE_STATUS `draft` — the status is a guarded lifecycle, never
+     * a caller-supplied field.
      *
      * @param array $data validated request payload
      * @return \App\Models\Schedule\ClassSchedule|string
      */
     public function createSchedule(array $data) {
         // ---- pre-flight checks (NO writes yet) ----
-        if ($this->hasTimeConflict($data)) {
-            return 'schedule_time_conflict';
+        $offering = CourseOffering::with('status')->find((int) $data['course_offering_id']);
+        if (!$offering) {
+            return 'course_offering_not_found';
+        }
+
+        $guard = $this->guardInputs($offering, $data);
+        if ($guard !== null) {
+            return $guard;
+        }
+
+        $draftId = LookupService::getValueByCode(CLASS_SCHEDULE_STATUS, CLASS_SCHEDULE_STATUS_DRAFT, needId: true);
+        if (!$draftId) {
+            return 'status_lookup_value_not_found';
         }
 
         try {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
-            $attributes = $this->buildAttributes($data);
-            $attributes['uuid'] = (string) Str::uuid();
-            $attributes['code'] = generateCode(name: $data['name'], options: [
-                CODE_OPT_UNIQUE => true,
-                CODE_OPT_MODEL => ClassSchedule::class,
-            ]);
-            $attributes['user_id'] = Auth::id();
-            $attributes['state'] = $data['state'] ?? STATE_ACTIVE;
+            $attributes = $this->buildAttributes($offering, $data);
+            $attributes['status_lookup_value_id'] = $draftId;
+            $attributes['state'] = STATE_ACTIVE;
+            $attributes['created_by_id'] = Auth::id();
 
             $schedule = ClassSchedule::create($attributes);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (QueryException $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+            $conflict = static::conflictKey($exception);
+            if (!$conflict) {
+                throw $exception;
+            }
+
+            return $conflict;
         } catch (\Throwable $exception) {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
             throw $exception;
@@ -48,25 +81,90 @@ class ClassScheduleService {
     }
 
     /**
-     * Update a schedule entry.
+     * Adjust a meeting: move its day, time, room or instructor. Only a draft may
+     * be adjusted — a published timetable is what students are reading.
      *
      * @param \App\Models\Schedule\ClassSchedule $schedule
      * @param array $data validated request payload
+     *
      * @return \App\Models\Schedule\ClassSchedule|string
      */
     public function updateSchedule(ClassSchedule $schedule, array $data) {
         // ---- pre-flight checks (NO writes yet) ----
-        if ($this->hasTimeConflict($data, ignoreId: $schedule->id)) {
-            return 'schedule_time_conflict';
+        if (!$schedule->isDraft()) {
+            return 'only_draft_schedules_can_be_edited';
+        }
+
+        $offering = CourseOffering::with('status')->find((int) $data['course_offering_id']);
+        if (!$offering) {
+            return 'course_offering_not_found';
+        }
+
+        $guard = $this->guardInputs($offering, $data);
+        if ($guard !== null) {
+            return $guard;
         }
 
         try {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
-            $schedule->fill($this->buildAttributes($data));
-            if (isset($data['state'])) {
-                $schedule->state = (int) $data['state'];
+            $schedule->fill($this->buildAttributes($offering, $data));
+            $schedule->save();
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (QueryException $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+            $conflict = static::conflictKey($exception);
+            if (!$conflict) {
+                throw $exception;
             }
+
+            return $conflict;
+        } catch (\Throwable $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+            throw $exception;
+        }
+
+        return $schedule->refresh();
+    }
+
+    /**
+     * Publish a meeting: `draft -> published`, stamping who published it.
+     * `state` is untouched — a published meeting is still live for conflict
+     * purposes, and must stay so.
+     *
+     * @param \App\Models\Schedule\ClassSchedule $schedule
+     * @return \App\Models\Schedule\ClassSchedule|string
+     */
+    public function publish(ClassSchedule $schedule) {
+        // ---- pre-flight checks (NO writes yet) ----
+        $currentCode = $schedule->status?->code;
+        if (!$currentCode) {
+            return 'status_lookup_value_not_found';
+        }
+
+        if (!LookupService::isTransitionAllowed(CLASS_SCHEDULE_STATUS, $currentCode, CLASS_SCHEDULE_STATUS_PUBLISHED)) {
+            return 'invalid_status_transition';
+        }
+
+        // A meeting nobody teaches, in no room, is not a timetable entry a
+        // student can act on.
+        if (!$schedule->room_id || !$schedule->instructor_id) {
+            return 'schedule_needs_a_room_and_an_instructor';
+        }
+
+        $publishedId = LookupService::getValueByCode(CLASS_SCHEDULE_STATUS, CLASS_SCHEDULE_STATUS_PUBLISHED, needId: true);
+        if (!$publishedId) {
+            return 'status_lookup_value_not_found';
+        }
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            $schedule->status_lookup_value_id = $publishedId;
+            $schedule->published_by_id = Auth::id();
+            $schedule->published_at = now();
             $schedule->save();
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
@@ -79,52 +177,124 @@ class ClassScheduleService {
     }
 
     /**
-     * Map a validated payload onto model attributes. The localized name keeps
-     * the {"en": ...} jsonb shape used across the project.
+     * Cancel a meeting: `status -> cancelled` AND `state -> STATE_INACTIVE` in
+     * one write. The second half is what frees the room, instructor and section
+     * slot — the three EXCLUDE constraints only see rows with `state = 1`.
      *
-     * @param array $data validated request payload
-     * @return array
+     * @param \App\Models\Schedule\ClassSchedule $schedule
+     * @return \App\Models\Schedule\ClassSchedule|string
      */
-    private function buildAttributes(array $data): array {
-        $isExam = (int) $data['schedule_type'] === ScheduleConstant::TYPE_EXAM;
+    public function cancel(ClassSchedule $schedule) {
+        // ---- pre-flight checks (NO writes yet) ----
+        $currentCode = $schedule->status?->code;
+        if (!$currentCode) {
+            return 'status_lookup_value_not_found';
+        }
 
-        return [
-            'name' => [English::getKey() => $data['name']],
-            'schedule_type' => (int) $data['schedule_type'],
-            'day_of_week' => $isExam ? null : ($data['day_of_week'] ?? null),
-            'exam_date' => $isExam ? ($data['exam_date'] ?? null) : null,
-            'start_time' => $data['start_time'],
-            'end_time' => $data['end_time'],
-            'room' => $data['room'] ?? null,
-            'section' => $data['section'] ?? null,
-        ];
+        if (!LookupService::isTransitionAllowed(CLASS_SCHEDULE_STATUS, $currentCode, CLASS_SCHEDULE_STATUS_CANCELLED)) {
+            return 'invalid_status_transition';
+        }
+
+        $cancelledId = LookupService::getValueByCode(CLASS_SCHEDULE_STATUS, CLASS_SCHEDULE_STATUS_CANCELLED, needId: true);
+        if (!$cancelledId) {
+            return 'status_lookup_value_not_found';
+        }
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            $schedule->status_lookup_value_id = $cancelledId;
+            $schedule->state = STATE_INACTIVE;
+            $schedule->save();
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Throwable $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+            throw $exception;
+        }
+
+        return $schedule->refresh();
     }
 
     /**
-     * A schedule conflicts when another ACTIVE entry books the same room on
-     * the same day (class) or date (exam) with an overlapping time range.
-     * Entries without a room never conflict.
+     * The error key for a conflict the database refused, or null when the
+     * QueryException was something else entirely (and must be rethrown).
      *
-     * @param array $data validated request payload
-     * @param int|null $ignoreId schedule id to exclude (update case)
-     * @return bool
+     * Static and public because the generator service maps its per-item
+     * failures through the same table.
+     *
+     * @param \Illuminate\Database\QueryException $exception
+     * @return string|null
      */
-    private function hasTimeConflict(array $data, ?int $ignoreId = null): bool {
-        $room = $data['room'] ?? null;
-        if (!$room) {
-            return false;
+    public static function conflictKey(QueryException $exception): ?string {
+        foreach (static::CONFLICT_KEYS as $constraint => $key) {
+            if (str_contains($exception->getMessage(), $constraint)) {
+                return $key;
+            }
         }
 
-        $isExam = (int) $data['schedule_type'] === ScheduleConstant::TYPE_EXAM;
+        return null;
+    }
 
-        return ClassSchedule::query()
-            ->where('room', $room)
-            ->where('state', STATE_ACTIVE)
-            ->when($ignoreId, fn ($query) => $query->whereNot('id', $ignoreId))
-            ->when($isExam, fn ($query) => $query->where('exam_date', $data['exam_date'] ?? null))
-            ->when(!$isExam, fn ($query) => $query->where('day_of_week', $data['day_of_week'] ?? null))
-            ->where('start_time', '<', $data['end_time'])
-            ->where('end_time', '>', $data['start_time'])
-            ->exists();
+    /**
+     * Business rules the foreign keys cannot express.
+     *
+     * @param \App\Models\Offering\CourseOffering $offering the meeting's parent
+     * @param array $data validated request payload
+     *
+     * @return string|null an error translation key, or null when the input is fine
+     */
+    private function guardInputs(CourseOffering $offering, array $data): ?string {
+        // A timetable is built from approved offerings. Scheduling one that is
+        // still in the approval chain would publish a decision nobody made.
+        if ($offering->status?->code !== COURSE_OFFERING_STATUS_REGISTRAR_APPROVED) {
+            return 'offering_is_not_approved';
+        }
+
+        if (!empty($data['instructor_id'])) {
+            $instructor = Instructor::find((int) $data['instructor_id']);
+            if (!$instructor?->can_teach || !$instructor->is_active) {
+                return 'instructor_cannot_teach';
+            }
+        }
+
+        if (!empty($data['room_id'])) {
+            $room = Room::find((int) $data['room_id']);
+            if (!$room?->is_active) {
+                return 'room_is_not_active';
+            }
+
+            if ($room->capacity < $offering->expected_students) {
+                return 'room_capacity_is_too_small';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Map a validated payload onto model attributes.
+     *
+     * `semester_id` and `section_id` are mirrored off the offering, never taken
+     * from the payload: the composite foreign keys would reject any other value,
+     * and the EXCLUDE constraints read them off this row.
+     *
+     * @param \App\Models\Offering\CourseOffering $offering
+     * @param array $data validated request payload
+     *
+     * @return array
+     */
+    private function buildAttributes(CourseOffering $offering, array $data): array {
+        return [
+            'course_offering_id' => $offering->id,
+            'semester_id' => $offering->semester_id,
+            'section_id' => $offering->section_id,
+            'instructor_id' => $data['instructor_id'] ?? null,
+            'room_id' => $data['room_id'] ?? null,
+            'session_type_lookup_value_id' => $data['session_type_lookup_value_id'] ?? null,
+            'day_of_week' => (int) $data['day_of_week'],
+            'start_time' => $data['start_time'],
+            'end_time' => $data['end_time'],
+        ];
     }
 }

@@ -7,16 +7,33 @@ use App\Http\Requests\Schedule\ClassScheduleRequest;
 use App\Models\Schedule\ClassSchedule;
 use App\Services\Schedule\ClassScheduleService;
 use Helper\Response\Response;
-use Helper\Type\State\State;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
+/**
+ * The class timetable. There is no `changeState` action here: `state` is the
+ * conflict-liveness flag, and it only ever moves together with the status
+ * through `publish` and `cancel` (Final Schema.md §14 design notes).
+ */
 class ClassScheduleController extends Controller {
 
+    /** Relations every read needs to render a timetable row. */
+    private const EAGER = [
+        'courseOffering.course',
+        'courseOffering.section.program',
+        'semester',
+        'section.program',
+        'instructor',
+        'room',
+        'status',
+        'sessionType',
+        'createdBy',
+        'publishedBy',
+    ];
+
     /**
-     * List class / exam schedules with search and filters.
+     * List class meetings with search and filters.
      *
      * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -27,23 +44,30 @@ class ClassScheduleController extends Controller {
         }
 
         $search = $request->input('search');
-        $scheduleType = $request->input('schedule_type');
-        $dayOfWeek = $request->input('day_of_week');
 
         $schedules = ClassSchedule::query()
-            ->with('user')
+            ->with(self::EAGER)
             ->when($search, function ($query) use ($search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('code', 'ilike', "%{$search}%")
-                          ->orWhere('room', 'ilike', "%{$search}%")
-                          ->orWhere('section', 'ilike', "%{$search}%")
-                          ->orWhere(fn ($query) => $query->jsonbLangValueSearch('name', $search, true));
-                });
+                $query
+                    ->where(function ($query) use ($search) {
+                        $query
+                            ->whereHas('courseOffering.course', fn ($query) => $query->where('code', 'ilike', "%{$search}%"))
+                            ->orWhereHas('courseOffering.course', fn ($query) => $query->jsonbLangValueSearch('title', $search, true))
+                            ->orWhereHas('room', fn ($query) => $query->where('code', 'ilike', "%{$search}%"));
+                    });
             })
-            ->when($scheduleType, fn ($query) => $query->where('schedule_type', (int) $scheduleType))
-            ->when($dayOfWeek, fn ($query) => $query->where('day_of_week', (int) $dayOfWeek))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage($request->input('limit')));
+            ->when($request->input('semester_id'), fn ($query) => $query->where('semester_id', (int) $request->input('semester_id')))
+            ->when($request->input('course_offering_id'), fn ($query) => $query->where('course_offering_id', (int) $request->input('course_offering_id')))
+            ->when($request->input('section_id'), fn ($query) => $query->where('section_id', (int) $request->input('section_id')))
+            ->when($request->input('instructor_id'), fn ($query) => $query->where('instructor_id', (int) $request->input('instructor_id')))
+            ->when($request->input('room_id'), fn ($query) => $query->where('room_id', (int) $request->input('room_id')))
+            ->when($request->input('day_of_week'), fn ($query) => $query->where('day_of_week', (int) $request->input('day_of_week')))
+            ->when($request->input('generation_run_id'), fn ($query) => $query->where('generation_run_id', (int) $request->input('generation_run_id')))
+            ->when($request->input('status_code'), fn ($query) => $query->whereHas('status', fn ($query) => $query->where('code', $request->input('status_code'))))
+            // A timetable reads by slot, not by edit time.
+            ->orderBy('day_of_week')
+            ->orderBy('start_time')
+            ->paginate(static::getPerPage());
 
         return Response::_200([
             'data' => $schedules->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
@@ -52,7 +76,7 @@ class ClassScheduleController extends Controller {
     }
 
     /**
-     * Show a schedule by numeric id OR uuid — see CLAUDE Sec. 10.18.
+     * Show a meeting by numeric id OR uuid — see CLAUDE Sec. 10.18.
      *
      * @param string $key
      * @return \Illuminate\Http\JsonResponse
@@ -63,7 +87,7 @@ class ClassScheduleController extends Controller {
         }
 
         $schedule = ClassSchedule::query()
-            ->with('user')
+            ->with(self::EAGER)
             ->when(ctype_digit((string) $key), fn ($query) => $query->where('id', (int) $key))
             ->when(!ctype_digit((string) $key), fn ($query) => $query->where('uuid', $key))
             ->first();
@@ -78,7 +102,7 @@ class ClassScheduleController extends Controller {
     }
 
     /**
-     * Create a schedule entry.
+     * Place one meeting by hand. It always starts at `draft`.
      *
      * @param \App\Http\Requests\Schedule\ClassScheduleRequest $request
      * @return \Illuminate\Http\JsonResponse
@@ -94,23 +118,22 @@ class ClassScheduleController extends Controller {
             return Response::_422(Message::get($result));
         }
 
-        $bindings = ['name' => $result->name__localized];
-
         return Response::_201([
-            'data' => $result->resource(),
-            'message' => Message::get('class_schedule_created_successfully', $bindings),
+            'data' => $result->fresh(self::EAGER)->resource(),
+            'message' => Message::get('class_schedule_created_successfully', ['name' => $result->displayLabel()]),
         ]);
     }
 
     /**
-     * Update a schedule entry.
+     * Adjust a draft meeting.
      *
      * @param \App\Http\Requests\Schedule\ClassScheduleRequest $request
      * @param int $id
+     *
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(ClassScheduleRequest $request, $id): JsonResponse {
-        $schedule = ClassSchedule::find($id);
+        $schedule = ClassSchedule::with('status')->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('class_schedule_not_found'));
         }
@@ -125,16 +148,15 @@ class ClassScheduleController extends Controller {
             return Response::_422(Message::get($result));
         }
 
-        $bindings = ['name' => $result->name__localized];
-
         return Response::_200([
-            'data' => $result->resource(),
-            'message' => Message::get('class_schedule_updated_successfully', $bindings),
+            'data' => $result->fresh(self::EAGER)->resource(),
+            'message' => Message::get('class_schedule_updated_successfully', ['name' => $result->displayLabel()]),
         ]);
     }
 
     /**
-     * Delete a schedule entry (soft delete).
+     * Delete a meeting. Only a draft may be discarded — a published meeting is
+     * cancelled instead, so the row stays as a record of what changed.
      *
      * @param int $id
      * @return \Illuminate\Http\JsonResponse
@@ -144,13 +166,22 @@ class ClassScheduleController extends Controller {
             return Response::_403();
         }
 
-        $schedule = ClassSchedule::find($id);
+        $schedule = ClassSchedule::with(['status', 'courseOffering.course', 'courseOffering.section.program'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('class_schedule_not_found'));
         }
 
-        $bindings = ['name' => $schedule->name__localized];
-        $schedule->delete();
+        if (!$schedule->isDraft()) {
+            return Response::_422(Message::get('only_draft_schedules_can_be_deleted'));
+        }
+
+        $bindings = ['name' => $schedule->displayLabel()];
+
+        try {
+            $schedule->delete();
+        } catch (\Illuminate\Database\QueryException $exception) {
+            return Response::_422(Message::get('class_schedule_is_in_use'));
+        }
 
         return Response::_200([
             'message' => Message::get('class_schedule_deleted_successfully', $bindings),
@@ -158,43 +189,67 @@ class ClassScheduleController extends Controller {
     }
 
     /**
-     * Toggle a schedule entry state.
+     * Publish a meeting: `draft -> published` (no body).
      *
      * @param int $id
      * @return \Illuminate\Http\JsonResponse
      */
-    public function changeState($id): JsonResponse {
-        if (!$this->userCanChangeClassScheduleState()) {
+    public function publish($id): JsonResponse {
+        if (!$this->userCanPublishClassSchedule()) {
             return Response::_403();
         }
 
-        $schedule = ClassSchedule::find($id);
+        $schedule = ClassSchedule::with(['status', 'courseOffering.course', 'courseOffering.section.program'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('class_schedule_not_found'));
         }
 
-        $validator = Validator::make(request()->all(), [
-            'state' => ['required', 'integer', State::ruleIn()],
-        ], Message::get('class_schedule') ?? []);
-
-        if (!$validator->passes()) {
-            return Response::_422(null, $validator->errors());
+        try {
+            $result = app(ClassScheduleService::class)->publish($schedule);
+        } catch (\Exception $exception) {
+            return Response::_500(Message::get('unable_to_update_class_schedule'));
         }
 
-        if ($schedule->state == request()->state) {
-            return Response::_422(Message::get('nothing_is_changed'));
+        if (is_string($result)) {
+            return Response::_422(Message::get($result));
         }
-
-        $schedule->state = (int) request()->state;
-        $schedule->save();
-
-        $message = request()->state == STATE_ACTIVE
-            ? 'class_schedule_activated'
-            : 'class_schedule_deactivated';
 
         return Response::_200([
-            'data' => $schedule->resource(),
-            'message' => Message::get($message, ['name' => $schedule->name__localized]),
+            'data' => $result->fresh(self::EAGER)->resource(),
+            'message' => Message::get('class_schedule_published_successfully', ['name' => $result->displayLabel()]),
+        ]);
+    }
+
+    /**
+     * Cancel a meeting: `status -> cancelled` AND `state -> STATE_INACTIVE`,
+     * which frees the slot for someone else (no body).
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function cancel($id): JsonResponse {
+        if (!$this->userCanCancelClassSchedule()) {
+            return Response::_403();
+        }
+
+        $schedule = ClassSchedule::with(['status', 'courseOffering.course', 'courseOffering.section.program'])->find($id);
+        if (!$schedule) {
+            return Response::_404(Message::get('class_schedule_not_found'));
+        }
+
+        try {
+            $result = app(ClassScheduleService::class)->cancel($schedule);
+        } catch (\Exception $exception) {
+            return Response::_500(Message::get('unable_to_update_class_schedule'));
+        }
+
+        if (is_string($result)) {
+            return Response::_422(Message::get($result));
+        }
+
+        return Response::_200([
+            'data' => $result->fresh(self::EAGER)->resource(),
+            'message' => Message::get('class_schedule_cancelled_successfully', ['name' => $result->displayLabel()]),
         ]);
     }
 }
