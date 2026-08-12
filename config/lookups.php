@@ -98,6 +98,24 @@ return [
     ],
 
     [
+        'name' => ['en' => 'Academic Rank', 'am' => 'የትምህርት ማዕረግ'],
+        'code' => ACADEMIC_RANK,
+        'description' => ['en' => 'Academic ladder position an instructor holds', 'am' => 'መምህሩ የያዘው የትምህርት ማዕረግ ደረጃ'],
+        'applies_to_model' => [MODEL_INSTRUCTOR],
+        'is_system' => true,
+        'values' => [
+            ['name' => ['en' => 'Graduate Assistant', 'am' => 'ምሩቅ ረዳት'], 'code' => ACADEMIC_RANK_GRADUATE_ASSISTANT, 'order' => 1, 'color' => '#6B7280'],
+            ['name' => ['en' => 'Assistant Lecturer', 'am' => 'ረዳት መምህር'], 'code' => ACADEMIC_RANK_ASSISTANT_LECTURER, 'order' => 2, 'color' => '#0EA5E9'],
+            ['name' => ['en' => 'Lecturer', 'am' => 'መምህር'], 'code' => ACADEMIC_RANK_LECTURER, 'order' => 3, 'color' => '#2563EB', 'is_default' => true],
+            ['name' => ['en' => 'Assistant Professor', 'am' => 'ረዳት ፕሮፌሰር'], 'code' => ACADEMIC_RANK_ASSISTANT_PROFESSOR, 'order' => 4, 'color' => '#7C3AED'],
+            ['name' => ['en' => 'Associate Professor', 'am' => 'ተባባሪ ፕሮፌሰር'], 'code' => ACADEMIC_RANK_ASSOCIATE_PROFESSOR, 'order' => 5, 'color' => '#9333EA'],
+            ['name' => ['en' => 'Professor', 'am' => 'ፕሮፌሰር'], 'code' => ACADEMIC_RANK_PROFESSOR, 'order' => 6, 'color' => '#DB2777'],
+            // A lab technician who only invigilates sits outside the teaching ladder.
+            ['name' => ['en' => 'Technical Assistant', 'am' => 'የቴክኒክ ረዳት'], 'code' => ACADEMIC_RANK_TECHNICAL_ASSISTANT, 'order' => 7, 'color' => '#14B8A6'],
+        ],
+    ],
+
+    [
         'name' => ['en' => 'Semester Status', 'am' => 'የሴሚስተር ሁኔታ'],
         'code' => SEMESTER_STATUS,
         'description' => ['en' => 'Where a semester sits in the scheduling cycle', 'am' => 'ሴሚስተሩ በፕሮግራም ዑደት ውስጥ ያለበት ደረጃ'],

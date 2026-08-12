@@ -170,6 +170,32 @@ define('PERMISSION_DELETE_ROOM', 'delete:room');
 define('PERMISSION_CHANGE_ROOM_STATE', 'change:room:state');
 
 /**
+ * Master Data: spreadsheet import / export.
+ *
+ * Deliberately separate from see/create/update: bulk-loading a department list
+ * is a different act from editing one row, and a registrar who may correct a
+ * typo is not automatically someone who may replace the whole table. Export is
+ * its own key for the mirror reason — it takes the entire filtered list out of
+ * the system in one file.
+ */
+define('PERMISSION_EXPORT_COLLEGE', 'export:college');
+define('PERMISSION_IMPORT_COLLEGE', 'import:college');
+define('PERMISSION_EXPORT_BUILDING', 'export:building');
+define('PERMISSION_IMPORT_BUILDING', 'import:building');
+define('PERMISSION_EXPORT_DEPARTMENT', 'export:department');
+define('PERMISSION_IMPORT_DEPARTMENT', 'import:department');
+define('PERMISSION_EXPORT_PROGRAM', 'export:program');
+define('PERMISSION_IMPORT_PROGRAM', 'import:program');
+define('PERMISSION_EXPORT_SECTION', 'export:section');
+define('PERMISSION_IMPORT_SECTION', 'import:section');
+define('PERMISSION_EXPORT_ROOM', 'export:room');
+define('PERMISSION_IMPORT_ROOM', 'import:room');
+define('PERMISSION_EXPORT_COURSE', 'export:course');
+define('PERMISSION_IMPORT_COURSE', 'import:course');
+define('PERMISSION_EXPORT_INSTRUCTOR', 'export:instructor');
+define('PERMISSION_IMPORT_INSTRUCTOR', 'import:instructor');
+
+/**
  * Course Offering Related — the four-tier approval workflow.
  *
  * `approve` and `reject` gate the trail-recording endpoint (step 10); which

@@ -865,6 +865,36 @@ class English extends Lang {
             'max_quantity' => 'Maximum Quantity',
             'min_quantity' => 'Minimum Quantity',
             'status_lookup_value_not_found' => 'Status lookup value not found',
+
+            /**
+             * Master-data spreadsheet import / export.
+             */
+            'import' => [
+                'file.required' => 'Please choose a file to import',
+                'file.file' => 'The upload is not a readable file',
+                'file.mimes' => 'Only .xlsx and .csv files can be imported',
+                'file.max' => 'The file is too large to import',
+                'mode.in' => 'Choose either create-only or upsert',
+                'dry_run.boolean' => 'Dry run must be true or false',
+                'skip_invalid.boolean' => 'Skip invalid must be true or false',
+            ],
+
+            'import_file_unreadable' => 'That file could not be read. Save it as .xlsx or .csv and try again.',
+            'import_file_is_empty' => 'That file has a header row but no data rows.',
+            'import_unknown_columns' => 'These columns are not part of this template: {{columns}}. Download the template and start from it.',
+            'import_missing_required_columns' => 'These required columns are missing: {{columns}}',
+            'import_too_many_rows' => 'That file has more than {{max}} rows. Split it and import the parts separately.',
+            'import_duplicate_in_file' => 'This record is already listed on row {{row}} of the same file ({{value}})',
+            'import_record_already_exists' => 'A record with this key already exists ({{value}}). Choose upsert mode to update it instead.',
+            'import_unresolved_reference' => 'No match for {{column}} "{{value}}". Import the parent list first.',
+            'import_failed' => 'The import failed and nothing was written.',
+            'import_rejected_no_rows_written' => 'The file was rejected. Nothing was written — fix the rows listed and import again.',
+            'import_dry_run_completed' => 'Preview: {{created}} to add, {{updated}} to update, {{skipped}} with errors. Nothing has been saved yet.',
+            'import_completed' => '{{created}} added, {{updated}} updated, {{skipped}} skipped.',
+            'unable_to_import_file' => 'Unable to import that file',
+            'yes' => 'Yes',
+            'no' => 'No',
+
         ];
     }
 }

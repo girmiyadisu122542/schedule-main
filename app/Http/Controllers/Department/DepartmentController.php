@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Department;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Department\DepartmentRequest;
+use App\Http\Requests\Import\DepartmentImportRequest;
 use App\Models\Academic\Department;
 use App\Services\Academic\DepartmentService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\DepartmentColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class DepartmentController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List departments with search and filters.
@@ -25,11 +30,29 @@ class DepartmentController extends Controller {
             return Response::_403();
         }
 
+        $departments = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $departments->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => Department::extractPagination($departments),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $collegeId = $request->input('college_id');
         $isActive = $request->input('is_active');
 
-        $departments = Department::query()
+        return Department::query()
             ->with(['college', 'head', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
@@ -41,13 +64,42 @@ class DepartmentController extends Controller {
             })
             ->when($collegeId, fn ($query) => $query->where('college_id', (int) $collegeId))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $departments->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => Department::extractPagination($departments),
-        ]);
+    /**
+     * Import departments from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\DepartmentImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(DepartmentImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new DepartmentColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportDepartment();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportDepartment();
     }
 
     /**

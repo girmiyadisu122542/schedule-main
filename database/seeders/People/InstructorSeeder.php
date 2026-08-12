@@ -5,6 +5,7 @@ namespace Database\Seeders\People;
 use App\Models\Academic\Department;
 use App\Models\People\Instructor;
 use App\Models\User;
+use App\Services\Lookup\LookupService;
 use Constants\AppConstant;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -26,21 +27,27 @@ class InstructorSeeder extends Seeder {
      */
     public function run(): void {
         $departmentByCode = fn (string $code): ?int => Department::query()->where('code', $code)->value('id');
+        $academicRankByCode = fn (string $code): ?int => LookupService::getValueByCode(ACADEMIC_RANK, $code, needId: true);
 
         if (!$departmentByCode('CS')) {
             consoleError('InstructorSeeder cannot proceed: run DepartmentSeeder first.');
             return;
         }
 
+        if (!$academicRankByCode(ACADEMIC_RANK_LECTURER)) {
+            consoleError('InstructorSeeder cannot proceed: ACADEMIC_RANK lookup values are missing.');
+            return;
+        }
+
         $teacherAccountId = User::query()->where('email', 'teacher@schedule.com')->value('id');
 
         $instructors = [
-            ['employee_no' => 'EMP-1001', 'department' => 'CS', 'rank' => 'Assistant Professor', 'can_teach' => true, 'can_invigilate' => true, 'max_weekly_hours' => 18, 'user_id' => $teacherAccountId, 'name' => ['en' => 'Dr. Alemu Bekele', 'am' => 'ዶ/ር አለሙ በቀለ']],
-            ['employee_no' => 'EMP-1002', 'department' => 'CS', 'rank' => 'Lecturer', 'can_teach' => true, 'can_invigilate' => true, 'max_weekly_hours' => 20, 'user_id' => null, 'name' => ['en' => 'Hanna Girma', 'am' => 'ሃና ግርማ']],
-            ['employee_no' => 'EMP-1003', 'department' => 'SE', 'rank' => 'Lecturer', 'can_teach' => true, 'can_invigilate' => true, 'max_weekly_hours' => 20, 'user_id' => null, 'name' => ['en' => 'Yonas Tesfaye', 'am' => 'ዮናስ ተስፋዬ']],
-            ['employee_no' => 'EMP-1004', 'department' => 'EE', 'rank' => 'Associate Professor', 'can_teach' => true, 'can_invigilate' => false, 'max_weekly_hours' => 12, 'user_id' => null, 'name' => ['en' => 'Prof. Meaza Tadesse', 'am' => 'ፕ/ር መአዛ ታደሰ']],
+            ['employee_no' => 'EMP-1001', 'department' => 'CS', 'rank' => ACADEMIC_RANK_ASSISTANT_PROFESSOR, 'can_teach' => true, 'can_invigilate' => true, 'max_weekly_hours' => 18, 'user_id' => $teacherAccountId, 'name' => ['en' => 'Dr. Alemu Bekele', 'am' => 'ዶ/ር አለሙ በቀለ']],
+            ['employee_no' => 'EMP-1002', 'department' => 'CS', 'rank' => ACADEMIC_RANK_LECTURER, 'can_teach' => true, 'can_invigilate' => true, 'max_weekly_hours' => 20, 'user_id' => null, 'name' => ['en' => 'Hanna Girma', 'am' => 'ሃና ግርማ']],
+            ['employee_no' => 'EMP-1003', 'department' => 'SE', 'rank' => ACADEMIC_RANK_LECTURER, 'can_teach' => true, 'can_invigilate' => true, 'max_weekly_hours' => 20, 'user_id' => null, 'name' => ['en' => 'Yonas Tesfaye', 'am' => 'ዮናስ ተስፋዬ']],
+            ['employee_no' => 'EMP-1004', 'department' => 'EE', 'rank' => ACADEMIC_RANK_ASSOCIATE_PROFESSOR, 'can_teach' => true, 'can_invigilate' => false, 'max_weekly_hours' => 12, 'user_id' => null, 'name' => ['en' => 'Prof. Meaza Tadesse', 'am' => 'ፕ/ር መአዛ ታደሰ']],
             // Only invigilates — the reason one table serves both populations.
-            ['employee_no' => 'EMP-1005', 'department' => 'CS', 'rank' => 'Lab Technician', 'can_teach' => false, 'can_invigilate' => true, 'max_weekly_hours' => null, 'user_id' => null, 'name' => ['en' => 'Samuel Kebede', 'am' => 'ሳሙኤል ከበደ']],
+            ['employee_no' => 'EMP-1005', 'department' => 'CS', 'rank' => ACADEMIC_RANK_TECHNICAL_ASSISTANT, 'can_teach' => false, 'can_invigilate' => true, 'max_weekly_hours' => null, 'user_id' => null, 'name' => ['en' => 'Samuel Kebede', 'am' => 'ሳሙኤል ከበደ']],
         ];
 
         try {
@@ -54,7 +61,7 @@ class InstructorSeeder extends Seeder {
                         Amharic::getKey() => $instructor['name']['am'],
                     ],
                     'department_id' => $departmentByCode($instructor['department']),
-                    'academic_rank' => $instructor['rank'],
+                    'academic_rank_lookup_value_id' => $academicRankByCode($instructor['rank']),
                     'user_id' => $instructor['user_id'],
                     'can_teach' => $instructor['can_teach'],
                     'can_invigilate' => $instructor['can_invigilate'],

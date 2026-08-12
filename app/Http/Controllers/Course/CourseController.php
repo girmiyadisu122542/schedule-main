@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Course;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Course\CourseRequest;
+use App\Http\Requests\Import\CourseImportRequest;
 use App\Models\Catalogue\Course;
 use App\Services\Catalogue\CourseService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\CourseColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class CourseController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List courses with search and filters.
@@ -25,10 +30,28 @@ class CourseController extends Controller {
             return Response::_403();
         }
 
+        $courses = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $courses->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => Course::extractPagination($courses),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $isActive = $request->input('is_active');
 
-        $courses = Course::query()
+        return Course::query()
             ->with(['department', 'courseType', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
@@ -41,13 +64,42 @@ class CourseController extends Controller {
             ->when($request->input('department_id'), fn ($query) => $query->where('department_id', (int) $request->input('department_id')))
             ->when($request->input('course_type_lookup_value_id'), fn ($query) => $query->where('course_type_lookup_value_id', (int) $request->input('course_type_lookup_value_id')))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $courses->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => Course::extractPagination($courses),
-        ]);
+    /**
+     * Import courses from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\CourseImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(CourseImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new CourseColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportCourse();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportCourse();
     }
 
     /**

@@ -2800,6 +2800,42 @@ class Amharic extends Lang {
             'noSittingsHere' => 'ገና የተመደበ ፈተና የለም።',
             'noDutiesHere' => 'ገና የቁጥጥር ምድብ የለም።',
             'noAvailabilityHere' => 'የቀረበ የዝግጁነት ሰዓት የለም።',
+
+            /**
+             * Master-data spreadsheet import / export.
+             */
+            'excelWorkbook' => 'የኤክሴል ፋይል (.xlsx)',
+            'csvFile' => 'የCSV ፋይል (.csv)',
+            'startFromTheTemplate' => 'ከቅጹ ይጀምሩ',
+            'templateExplainer' => 'ቅጹ ይህ ማስገቢያ የሚቀበላቸውን ትክክለኛ አምዶች እና አንድ የናሙና ረድፍ ይዟል።',
+            'templateXlsx' => 'ቅጽ (.xlsx)',
+            'templateCsv' => 'ቅጽ (.csv)',
+            'importOrder' => 'የማስገባት ቅደም ተከተል',
+            'chooseFile' => 'ፋይል ይምረጡ',
+            'whenARecordAlreadyExists' => 'መዝገቡ አስቀድሞ ሲኖር',
+            'createOnly' => 'አዲስ መዝገቦችን ብቻ ጨምር',
+            'createOnlyHint' => 'ኮዱ አስቀድሞ ያለ ረድፍ እንደ ስህተት ይመዘገባል።',
+            'upsert' => 'አዲስ ጨምር እና ያሉትን አዘምን',
+            'upsertHint' => 'ኮዱ አስቀድሞ ያለ ረድፍ ያንን መዝገብ ያዘምናል።',
+            'toAdd' => 'የሚጨመሩ',
+            'toUpdate' => 'የሚዘመኑ',
+            'withErrors' => 'ስህተት ያላቸው',
+            'nothingSavedYet' => 'እስካሁን ምንም አልተቀመጠም። እነዚህን ረድፎች ለመመዝገብ ያረጋግጡ።',
+            'column' => 'አምድ',
+            'problem' => 'ችግር',
+            'andMore' => 'እና',
+            'moreErrors' => 'ተጨማሪ',
+            'selectAcademicRank' => 'የትምህርት ማዕረግ ይምረጡ',
+
+            'importOrderColleges' => 'ኮሌጆች በትምህርት ተዋረድ ላይ ከፍተኛው ናቸው፤ ቅድመ ሁኔታ የላቸውም።',
+            'importOrderBuildings' => 'መጀመሪያ ካምፓሶች መኖር አለባቸው፦ ካምፓስ → ሕንፃ → ክፍል።',
+            'importOrderDepartments' => 'መጀመሪያ ኮሌጆች መኖር አለባቸው፦ ኮሌጅ → ዲፓርትመንት።',
+            'importOrderPrograms' => 'መጀመሪያ ኮሌጆችና ዲፓርትመንቶች መኖር አለባቸው፦ ኮሌጅ → ዲፓርትመንት → ፕሮግራም።',
+            'importOrderSections' => 'መጀመሪያ ፕሮግራሞችና የትምህርት ዓመታት መኖር አለባቸው፦ ኮሌጅ → ዲፓርትመንት → ፕሮግራም → ክፍል።',
+            'importOrderRooms' => 'መጀመሪያ ሕንፃዎች መኖር አለባቸው፦ ካምፓስ → ሕንፃ → ክፍል።',
+            'importOrderCourses' => 'መጀመሪያ ዲፓርትመንቶች መኖር አለባቸው፦ ኮሌጅ → ዲፓርትመንት → ኮርስ።',
+            'importOrderInstructors' => 'መጀመሪያ ዲፓርትመንቶች መኖር አለባቸው፦ ኮሌጅ → ዲፓርትመንት → መምህር።',
+
         ];
     }
 }

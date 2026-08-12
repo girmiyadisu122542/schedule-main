@@ -3,6 +3,7 @@
 namespace App\Models\People;
 
 use App\Models\Academic\Department;
+use App\Models\Common\Lookup\LookupValue;
 use App\Models\Invigilation\ExamInvigilatorAssignment;
 use App\Models\Invigilation\InvigilatorAvailability;
 use App\Models\Offering\CourseOffering;
@@ -42,7 +43,7 @@ class Instructor extends ScopedModel {
         'email',
         'phone',
         'department_id',
-        'academic_rank',
+        'academic_rank_lookup_value_id',
         'can_teach',
         'can_invigilate',
         'max_weekly_hours',
@@ -70,6 +71,16 @@ class Instructor extends ScopedModel {
      */
     public function department(): BelongsTo {
         return $this->belongsTo(Department::class);
+    }
+
+    /**
+     * Relationship LookupValue — the ACADEMIC_RANK ladder position.
+     * A semantic relation, so it keeps both its name and its explicit FK.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function academicRank(): BelongsTo {
+        return $this->belongsTo(LookupValue::class, 'academic_rank_lookup_value_id');
     }
 
     /**
@@ -125,7 +136,10 @@ class Instructor extends ScopedModel {
             Field::name('full_name__localized'),
             Field::email(),
             Field::phone(),
-            Field::academicRank(),
+            Field::academicRankLookupValueId()->asInt(),
+            // The rank chip reads `academic_rank_code` + the lookup's own color.
+            Field::academicRankCode('academicRank.code'),
+            Field::makeResource('academic_rank', 'academicRank', fields: 'idAndNameFields'),
             Field::departmentId()->asInt(),
             Field::userId()->asInt(),
             Field::canTeach()->asBool(),

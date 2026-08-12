@@ -13,15 +13,15 @@ return SideBar::create([
             SideBarItem::configurations('Database', null, [
                 SideBarItem::campuses('MapPin', FrontendPaths::CAMPUSES),
                 SideBarItem::buildings('ModernBuilding', FrontendPaths::BUILDINGS),
+                SideBarItem::rooms('KeyIcon', FrontendPaths::ROOMS),
                 SideBarItem::collegesOrSchools('BuildingCityIcon', FrontendPaths::COLLEGES),
                 SideBarItem::departments('BuildingIcon', FrontendPaths::DEPARTMENTS),
-                SideBarItem::academicYears('Calendar', FrontendPaths::ACADEMIC_YEARS),
                 SideBarItem::programs('BookIcon', FrontendPaths::PROGRAMS),
+                SideBarItem::academicYears('Calendar', FrontendPaths::ACADEMIC_YEARS),
                 SideBarItem::semesters('ClockTimeTimerArrow', FrontendPaths::SEMESTERS),
                 SideBarItem::instructors('UserIcon', FrontendPaths::INSTRUCTORS),
                 SideBarItem::sections('BusinessChart', FrontendPaths::SECTIONS),
                 SideBarItem::courses('BookIcon', FrontendPaths::COURSES),
-                SideBarItem::rooms('KeyIcon', FrontendPaths::ROOMS),
             ]),
             SideBarItem::courseOfferings('FileText', FrontendPaths::OFFERINGS),
             SideBarItem::scheduling('ClockTimeTimerArrow', null, [

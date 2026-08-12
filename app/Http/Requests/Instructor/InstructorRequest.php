@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Instructor;
 
 use App\Models\Academic\Department;
+use App\Models\Common\Lookup\LookupValue;
 use App\Models\People\Instructor;
 use App\Models\User;
 use Constants\AppConstant;
@@ -42,7 +43,7 @@ class InstructorRequest extends FormRequest {
             'email' => ['nullable', 'email', 'max:' . MAX_INSTRUCTOR_EMAIL_LENGTH],
             'phone' => ['nullable', 'string', 'max:' . MAX_PHONE_LENGTH],
             'department_id' => ['required', 'integer', Department::exists()],
-            'academic_rank' => ['nullable', 'string', 'max:' . MAX_ACADEMIC_RANK_LENGTH],
+            'academic_rank_lookup_value_id' => ['nullable', 'integer', LookupValue::exists()],
             // The optional portal account — THE PERSON, not a creator reference.
             // One instructor row per user, so the link is unique.
             'user_id' => [

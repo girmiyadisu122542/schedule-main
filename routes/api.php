@@ -169,16 +169,37 @@ Route::middleware(API_GUARD_MIDDLEWARE)
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/campuses/{id}/state', [CampusController::class, 'changeState']);
 
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /buildings/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/buildings/export', [BuildingController::class, 'export']);
+        Route::get('/buildings/import-template', [BuildingController::class, 'importTemplate']);
+        Route::post('/buildings/import', [BuildingController::class, 'import']);
+
         Route::apiResource('/buildings', BuildingController::class)
             ->parameters(['buildings' => 'id'])
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/buildings/{id}/state', [BuildingController::class, 'changeState']);
 
         // Master data -- academic hierarchy
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /colleges/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/colleges/export', [CollegeController::class, 'export']);
+        Route::get('/colleges/import-template', [CollegeController::class, 'importTemplate']);
+        Route::post('/colleges/import', [CollegeController::class, 'import']);
+
         Route::apiResource('/colleges', CollegeController::class)
             ->parameters(['colleges' => 'id'])
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/colleges/{id}/state', [CollegeController::class, 'changeState']);
+
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /departments/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/departments/export', [DepartmentController::class, 'export']);
+        Route::get('/departments/import-template', [DepartmentController::class, 'importTemplate']);
+        Route::post('/departments/import', [DepartmentController::class, 'import']);
 
         Route::apiResource('/departments', DepartmentController::class)
             ->parameters(['departments' => 'id'])
@@ -190,6 +211,13 @@ Route::middleware(API_GUARD_MIDDLEWARE)
         Route::apiResource('/academic-years', AcademicYearController::class)
             ->parameters(['academic-years' => 'id'])
             ->where(['id' => '[A-Za-z0-9-]+']);
+
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /programs/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/programs/export', [ProgramController::class, 'export']);
+        Route::get('/programs/import-template', [ProgramController::class, 'importTemplate']);
+        Route::post('/programs/import', [ProgramController::class, 'import']);
 
         Route::apiResource('/programs', ProgramController::class)
             ->parameters(['programs' => 'id'])
@@ -203,10 +231,24 @@ Route::middleware(API_GUARD_MIDDLEWARE)
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/semesters/{id}/change-status', [SemesterController::class, 'changeStatus']);
 
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /sections/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/sections/export', [SectionController::class, 'export']);
+        Route::get('/sections/import-template', [SectionController::class, 'importTemplate']);
+        Route::post('/sections/import', [SectionController::class, 'import']);
+
         Route::apiResource('/sections', SectionController::class)
             ->parameters(['sections' => 'id'])
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/sections/{id}/state', [SectionController::class, 'changeState']);
+
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /rooms/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/rooms/export', [RoomController::class, 'export']);
+        Route::get('/rooms/import-template', [RoomController::class, 'importTemplate']);
+        Route::post('/rooms/import', [RoomController::class, 'import']);
 
         Route::apiResource('/rooms', RoomController::class)
             ->parameters(['rooms' => 'id'])
@@ -214,10 +256,24 @@ Route::middleware(API_GUARD_MIDDLEWARE)
         Route::post('/rooms/{id}/state', [RoomController::class, 'changeState']);
 
         // Catalogue & people
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /courses/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/courses/export', [CourseController::class, 'export']);
+        Route::get('/courses/import-template', [CourseController::class, 'importTemplate']);
+        Route::post('/courses/import', [CourseController::class, 'import']);
+
         Route::apiResource('/courses', CourseController::class)
             ->parameters(['courses' => 'id'])
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/courses/{id}/state', [CourseController::class, 'changeState']);
+
+        // Import / export. Declared BEFORE the apiResource: the resource's
+        // {id} placeholder matches [A-Za-z0-9-]+, so a later /instructors/export
+        // would be swallowed by show() with id = "export".
+        Route::get('/instructors/export', [InstructorController::class, 'export']);
+        Route::get('/instructors/import-template', [InstructorController::class, 'importTemplate']);
+        Route::post('/instructors/import', [InstructorController::class, 'import']);
 
         Route::apiResource('/instructors', InstructorController::class)
             ->parameters(['instructors' => 'id'])
