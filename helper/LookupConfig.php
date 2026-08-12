@@ -32,6 +32,21 @@ define('DEGREE_LEVEL_BACHELOR', 'bachelor');
 define('DEGREE_LEVEL_MASTER', 'master');
 define('DEGREE_LEVEL_PHD', 'phd');
 
+/**
+ * The Ethiopian higher-education academic ladder. Promoted from the free-form
+ * `instructors.academic_rank` string to a lookup so a spreadsheet import can
+ * resolve it by stable code and so rank can eventually drive behaviour
+ * (workload ceilings, invigilation eligibility) without another migration.
+ */
+define('ACADEMIC_RANK', 'ACADEMIC_RANK');
+define('ACADEMIC_RANK_GRADUATE_ASSISTANT', 'graduate_assistant');
+define('ACADEMIC_RANK_ASSISTANT_LECTURER', 'assistant_lecturer');
+define('ACADEMIC_RANK_LECTURER', 'lecturer');
+define('ACADEMIC_RANK_ASSISTANT_PROFESSOR', 'assistant_professor');
+define('ACADEMIC_RANK_ASSOCIATE_PROFESSOR', 'associate_professor');
+define('ACADEMIC_RANK_PROFESSOR', 'professor');
+define('ACADEMIC_RANK_TECHNICAL_ASSISTANT', 'technical_assistant');
+
 define('SEMESTER_STATUS', 'SEMESTER_STATUS');
 define('SEMESTER_STATUS_PLANNING', 'planning');
 define('SEMESTER_STATUS_SCHEDULING', 'scheduling');

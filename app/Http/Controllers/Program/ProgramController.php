@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Program;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Import\ProgramImportRequest;
 use App\Http\Requests\Program\ProgramRequest;
 use App\Models\Academic\Program;
 use App\Services\Academic\ProgramService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\ProgramColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class ProgramController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List programs with search and filters.
@@ -25,11 +30,29 @@ class ProgramController extends Controller {
             return Response::_403();
         }
 
+        $programs = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $programs->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => Program::extractPagination($programs),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $departmentId = $request->input('department_id');
         $isActive = $request->input('is_active');
 
-        $programs = Program::query()
+        return Program::query()
             ->with(['department', 'degreeLevel', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
@@ -41,13 +64,42 @@ class ProgramController extends Controller {
             })
             ->when($departmentId, fn ($query) => $query->where('department_id', (int) $departmentId))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $programs->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => Program::extractPagination($programs),
-        ]);
+    /**
+     * Import programs from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\ProgramImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(ProgramImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new ProgramColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportProgram();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportProgram();
     }
 
     /**

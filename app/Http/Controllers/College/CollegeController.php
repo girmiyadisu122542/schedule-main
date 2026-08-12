@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\College;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\College\CollegeRequest;
+use App\Http\Requests\Import\CollegeImportRequest;
 use App\Models\Academic\College;
 use App\Services\Academic\CollegeService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\CollegeColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class CollegeController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List colleges with search and filters.
@@ -25,10 +30,28 @@ class CollegeController extends Controller {
             return Response::_403();
         }
 
+        $colleges = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $colleges->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => College::extractPagination($colleges),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $isActive = $request->input('is_active');
 
-        $colleges = College::query()
+        return College::query()
             ->with(['dean', 'user'])
             ->withCount('departments')
             ->when($search, function ($query) use ($search) {
@@ -40,13 +63,42 @@ class CollegeController extends Controller {
                     });
             })
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $colleges->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => College::extractPagination($colleges),
-        ]);
+    /**
+     * Import colleges from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\CollegeImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(CollegeImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new CollegeColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportCollege();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportCollege();
     }
 
     /**

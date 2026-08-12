@@ -109,7 +109,7 @@ class InstructorService {
             'email' => $data['email'] ?? null,
             'phone' => $data['phone'] ?? null,
             'department_id' => (int) $data['department_id'],
-            'academic_rank' => $data['academic_rank'] ?? null,
+            'academic_rank_lookup_value_id' => $data['academic_rank_lookup_value_id'] ?? null,
             'user_id' => $data['user_id'] ?? null,
             'can_teach' => (bool) ($data['can_teach'] ?? true),
             'can_invigilate' => (bool) ($data['can_invigilate'] ?? true),

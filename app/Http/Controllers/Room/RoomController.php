@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Room;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Import\RoomImportRequest;
 use App\Http\Requests\Room\RoomRequest;
 use App\Models\Physical\Room;
 use App\Services\Physical\RoomService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\RoomColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class RoomController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List rooms with search and filters.
@@ -25,10 +30,28 @@ class RoomController extends Controller {
             return Response::_403();
         }
 
+        $rooms = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $rooms->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => Room::extractPagination($rooms),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $isActive = $request->input('is_active');
 
-        $rooms = Room::query()
+        return Room::query()
             ->with(['building.campus', 'roomType', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
@@ -42,13 +65,42 @@ class RoomController extends Controller {
             ->when($request->input('room_type_lookup_value_id'), fn ($query) => $query->where('room_type_lookup_value_id', (int) $request->input('room_type_lookup_value_id')))
             ->when($request->has('is_exam_venue'), fn ($query) => $query->where('is_exam_venue', $request->boolean('is_exam_venue')))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $rooms->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => Room::extractPagination($rooms),
-        ]);
+    /**
+     * Import rooms from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\RoomImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(RoomImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new RoomColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportRoom();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportRoom();
     }
 
     /**

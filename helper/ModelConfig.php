@@ -28,6 +28,7 @@ define('MODEL_PROGRAM', 'programs');
 define('MODEL_SEMESTER', 'semesters');
 define('MODEL_ROOM', 'rooms');
 define('MODEL_COURSE', 'courses');
+define('MODEL_INSTRUCTOR', 'instructors');
 define('MODEL_COURSE_OFFERING', 'course_offerings');
 define('MODEL_COURSE_OFFERING_APPROVAL', 'course_offering_approvals');
 define('MODEL_CLASS_SCHEDULE', 'class_schedules');

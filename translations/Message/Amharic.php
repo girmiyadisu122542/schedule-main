@@ -853,6 +853,36 @@ class Amharic extends Lang {
             'max_quantity' => 'ከፍተኛ መጠን',
             'min_quantity' => 'ዝቅተኛ መጠን',
             'status_lookup_value_not_found' => 'የሁኔታ ፍለጋ ዋጋ አልተገኘም።',
+
+            /**
+             * Master-data spreadsheet import / export.
+             */
+            'import' => [
+                'file.required' => 'እባክዎ የሚያስገቡትን ፋይል ይምረጡ',
+                'file.file' => 'የተጫነው ፋይል ሊነበብ አልቻለም',
+                'file.mimes' => '.xlsx እና .csv ፋይሎች ብቻ ማስገባት ይቻላል',
+                'file.max' => 'ፋይሉ ለማስገባት በጣም ትልቅ ነው',
+                'mode.in' => 'መፍጠር-ብቻ ወይም ማዘመን ይምረጡ',
+                'dry_run.boolean' => 'የሙከራ ማስኬጃ እውነት ወይም ሐሰት መሆን አለበት',
+                'skip_invalid.boolean' => 'ልክ ያልሆኑትን መዝለል እውነት ወይም ሐሰት መሆን አለበት',
+            ],
+
+            'import_file_unreadable' => 'ፋይሉ ሊነበብ አልቻለም። በ.xlsx ወይም በ.csv አስቀምጠው እንደገና ይሞክሩ።',
+            'import_file_is_empty' => 'ፋይሉ የአምድ ርዕስ አለው ግን ምንም መረጃ የለውም።',
+            'import_unknown_columns' => 'እነዚህ አምዶች የዚህ ቅጽ አካል አይደሉም፦ {{columns}}። ቅጹን አውርደው ከእሱ ይጀምሩ።',
+            'import_missing_required_columns' => 'እነዚህ የግድ የሚያስፈልጉ አምዶች ጎድለዋል፦ {{columns}}',
+            'import_too_many_rows' => 'ፋይሉ ከ{{max}} በላይ ረድፎች አሉት። ከፋፍለው ለየብቻ ያስገቡ።',
+            'import_duplicate_in_file' => 'ይህ መዝገብ በዚሁ ፋይል ረድፍ {{row}} ላይ አስቀድሞ ተዘርዝሯል ({{value}})',
+            'import_record_already_exists' => 'በዚህ መለያ የተመዘገበ አስቀድሞ አለ ({{value}})። ለማዘመን የማዘመን ሁነታን ይምረጡ።',
+            'import_unresolved_reference' => 'ለ{{column}} "{{value}}" ተመሳሳይ አልተገኘም። መጀመሪያ የወላጅ ዝርዝሩን ያስገቡ።',
+            'import_failed' => 'ማስገባቱ አልተሳካም፤ ምንም አልተመዘገበም።',
+            'import_rejected_no_rows_written' => 'ፋይሉ ተቀባይነት አላገኘም። ምንም አልተመዘገበም — የተዘረዘሩትን ረድፎች አስተካክለው እንደገና ያስገቡ።',
+            'import_dry_run_completed' => 'ቅድመ እይታ፦ {{created}} ይጨመራሉ፣ {{updated}} ይዘመናሉ፣ {{skipped}} ስህተት አላቸው። እስካሁን ምንም አልተቀመጠም።',
+            'import_completed' => '{{created}} ተጨምረዋል፣ {{updated}} ተዘምነዋል፣ {{skipped}} ተዘለዋል።',
+            'unable_to_import_file' => 'ፋይሉን ማስገባት አልተቻለም',
+            'yes' => 'አዎ',
+            'no' => 'አይ',
+
         ];
     }
 }

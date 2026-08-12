@@ -2797,6 +2797,44 @@ class English extends Lang {
             'noSittingsHere' => 'No exams scheduled here yet.',
             'noDutiesHere' => 'No invigilation duties yet.',
             'noAvailabilityHere' => 'No availability windows offered.',
+
+            /**
+             * Master-data spreadsheet import / export.
+             * `export`, `import`, `row`, `preview` and `cancel` already exist
+             * above — reused rather than redefined (a duplicate key silently wins).
+             */
+            'excelWorkbook' => 'Excel workbook (.xlsx)',
+            'csvFile' => 'CSV file (.csv)',
+            'startFromTheTemplate' => 'Start from the template',
+            'templateExplainer' => 'The template carries the exact columns this import accepts, plus one worked example row.',
+            'templateXlsx' => 'Template (.xlsx)',
+            'templateCsv' => 'Template (.csv)',
+            'importOrder' => 'Import order',
+            'chooseFile' => 'Choose a file',
+            'whenARecordAlreadyExists' => 'When a record already exists',
+            'createOnly' => 'Add new records only',
+            'createOnlyHint' => 'A row whose code already exists is reported as an error.',
+            'upsert' => 'Add new and update existing',
+            'upsertHint' => 'A row whose code already exists updates that record.',
+            'toAdd' => 'to add',
+            'toUpdate' => 'to update',
+            'withErrors' => 'with errors',
+            'nothingSavedYet' => 'Nothing has been saved yet. Confirm to write these rows.',
+            'column' => 'Column',
+            'problem' => 'Problem',
+            'andMore' => 'and',
+            'moreErrors' => 'more',
+            'selectAcademicRank' => 'Select an academic rank',
+
+            'importOrderColleges' => 'Colleges sit at the top of the academic hierarchy and have no prerequisites.',
+            'importOrderBuildings' => 'Campuses must exist first: campuses → buildings → rooms.',
+            'importOrderDepartments' => 'Colleges must exist first: colleges → departments.',
+            'importOrderPrograms' => 'Colleges and departments must exist first: colleges → departments → programs.',
+            'importOrderSections' => 'Programs and academic years must exist first: colleges → departments → programs → sections.',
+            'importOrderRooms' => 'Buildings must exist first: campuses → buildings → rooms.',
+            'importOrderCourses' => 'Departments must exist first: colleges → departments → courses.',
+            'importOrderInstructors' => 'Departments must exist first: colleges → departments → instructors.',
+
         ];
     }
 }

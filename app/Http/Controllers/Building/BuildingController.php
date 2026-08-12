@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Building;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Building\BuildingRequest;
+use App\Http\Requests\Import\BuildingImportRequest;
 use App\Models\Physical\Building;
 use App\Services\Physical\BuildingService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\BuildingColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class BuildingController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List buildings with search and filters.
@@ -25,11 +30,29 @@ class BuildingController extends Controller {
             return Response::_403();
         }
 
+        $buildings = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $buildings->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => Building::extractPagination($buildings),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $campusId = $request->input('campus_id');
         $isActive = $request->input('is_active');
 
-        $buildings = Building::query()
+        return Building::query()
             ->with(['campus', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
@@ -41,13 +64,42 @@ class BuildingController extends Controller {
             })
             ->when($campusId, fn ($query) => $query->where('campus_id', (int) $campusId))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $buildings->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => Building::extractPagination($buildings),
-        ]);
+    /**
+     * Import buildings from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\BuildingImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(BuildingImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new BuildingColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportBuilding();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportBuilding();
     }
 
     /**

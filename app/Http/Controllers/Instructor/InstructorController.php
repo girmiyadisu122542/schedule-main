@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Instructor;
 
+use App\Http\Controllers\Concerns\HandlesMasterDataImportExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Import\InstructorImportRequest;
 use App\Http\Requests\Instructor\InstructorRequest;
 use App\Models\People\Instructor;
 use App\Services\People\InstructorService;
+use App\Support\Import\ColumnMap\AbstractColumnMap;
+use App\Support\Import\ColumnMap\InstructorColumnMap;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use Translation\Message;
 
 class InstructorController extends Controller {
+    use HandlesMasterDataImportExport;
 
     /**
      * List instructors with search and filters.
@@ -25,11 +30,29 @@ class InstructorController extends Controller {
             return Response::_403();
         }
 
+        $instructors = $this->filteredQuery($request)->paginate(static::getPerPage());
+
+        return Response::_200([
+            'data' => $instructors->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
+            'pagination' => Instructor::extractPagination($instructors),
+        ]);
+    }
+
+    /**
+     * The filtered builder behind BOTH `index` and `export`.
+     *
+     * Export honours whatever the user has filtered to, and it does so by
+     * calling this — the filter logic is defined once, here.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function filteredQuery(Request $request) {
         $search = $request->input('search');
         $isActive = $request->input('is_active');
 
-        $instructors = Instructor::query()
-            ->with(['department', 'person'])
+        return Instructor::query()
+            ->with(['department', 'person', 'academicRank'])
             ->when($search, function ($query) use ($search) {
                 $query
                     ->where(function ($query) use ($search) {
@@ -43,13 +66,42 @@ class InstructorController extends Controller {
             ->when($request->has('can_teach'), fn ($query) => $query->where('can_teach', $request->boolean('can_teach')))
             ->when($request->has('can_invigilate'), fn ($query) => $query->where('can_invigilate', $request->boolean('can_invigilate')))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
-            ->latest('updated_at')
-            ->paginate(static::getPerPage());
+            ->latest('updated_at');
+    }
 
-        return Response::_200([
-            'data' => $instructors->collection(isDropdownEnabled() ? 'idAndNameFields' : null),
-            'pagination' => Instructor::extractPagination($instructors),
-        ]);
+    /**
+     * Import instructors from a spreadsheet.
+     *
+     * Declared here rather than inherited so the route type-hints the
+     * CONCRETE request — `ImportRequest` is abstract and the container
+     * cannot build it.
+     *
+     * @param \App\Http\Requests\Import\InstructorImportRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function import(InstructorImportRequest $request): JsonResponse {
+        return $this->handleImport($request);
+    }
+
+    /**
+     * @return \App\Support\Import\ColumnMap\AbstractColumnMap
+     */
+    protected function columnMap(): AbstractColumnMap {
+        return new InstructorColumnMap();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canExportEntity(): bool {
+        return $this->userCanExportInstructor();
+    }
+
+    /**
+     * @return bool
+     */
+    protected function canImportEntity(): bool {
+        return $this->userCanImportInstructor();
     }
 
     /**
@@ -64,7 +116,7 @@ class InstructorController extends Controller {
         }
 
         $instructor = Instructor::query()
-            ->with(['department', 'person'])
+            ->with(['department', 'person', 'academicRank'])
             ->when(ctype_digit((string) $key), fn ($query) => $query->where('id', (int) $key))
             ->when(!ctype_digit((string) $key), fn ($query) => $query->where('uuid', $key))
             ->first();
