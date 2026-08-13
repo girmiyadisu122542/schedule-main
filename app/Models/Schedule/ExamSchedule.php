@@ -243,7 +243,21 @@ class ExamSchedule extends ScopedModel {
             Field::makeResource('course_offering', 'courseOffering', fields: 'idAndNameFields'),
             Field::makeResource('semester', fields: 'idAndNameFields'),
             Field::makeResource('section', fields: 'idAndNameFields'),
+            // Ownership, one hop through the offering (Final Schema.md §12) —
+            // what the master timetable groups its rows by.
+            Field::makeResource('department', 'courseOffering.department', fields: 'idAndNameFields'),
+            Field::makeResource('program', 'courseOffering.program', fields: 'idAndNameFields'),
             Field::makeResource('room', fields: 'idAndNameFields'),
+            // Who is on duty. Live duties only — a declined or replaced one is
+            // STATE_INACTIVE and is nobody's name to print on a timetable.
+            Field::make('invigilators', fn ($data) => $data->examInvigilatorAssignments
+                ->where('state', STATE_ACTIVE)
+                ->map(fn ($duty) => [
+                    'employee_no' => $duty->instructor?->employee_no,
+                    'name' => $duty->instructor?->full_name__localized,
+                    'role_code' => $duty->role?->code,
+                ])
+                ->values()),
             Field::makeResource('created_by', 'createdBy', fields: 'idAndNameFields'),
             Field::makeResource('confirmed_by', 'confirmedBy', fields: 'idAndNameFields'),
             Field::makeResource('published_by', 'publishedBy', fields: 'idAndNameFields'),
@@ -263,6 +277,13 @@ class ExamSchedule extends ScopedModel {
             Field::id(),
             Field::uuid(),
             Field::name(fn ($data) => $data->displayLabel()),
+            // The parts an invigilator roster prints: a duty sheet says
+            // "CS101 · NB-301", never the whole composed label.
+            Field::courseCode('courseOffering.course.code'),
+            Field::examDate(fn ($data) => $data->exam_date?->format(DATE_FORMAT)),
+            Field::timeRange(fn ($data) => $data->timeRange()),
+            Field::roomCode('room.code'),
+            Field::roomName('room.name__localized'),
         ];
     }
 }

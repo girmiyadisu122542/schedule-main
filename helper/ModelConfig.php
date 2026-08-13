@@ -35,3 +35,4 @@ define('MODEL_CLASS_SCHEDULE', 'class_schedules');
 define('MODEL_EXAM_SCHEDULE', 'exam_schedules');
 define('MODEL_SCHEDULE_GENERATION_RUN', 'schedule_generation_runs');
 define('MODEL_EXAM_INVIGILATOR_ASSIGNMENT', 'exam_invigilator_assignments');
+define('MODEL_INVIGILATION_REQUEST', 'invigilation_requests');

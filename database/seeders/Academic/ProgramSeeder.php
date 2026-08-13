@@ -42,10 +42,10 @@ class ProgramSeeder extends Seeder {
         }
 
         $programs = [
-            ['code' => 'BSC-CS', 'department_code' => 'CS', 'degree_level' => DEGREE_LEVEL_BACHELOR, 'duration_years' => 4, 'name' => ['en' => 'BSc in Computer Science', 'am' => 'የኮምፒውተር ሳይንስ ባችለር']],
-            ['code' => 'MSC-CS', 'department_code' => 'CS', 'degree_level' => DEGREE_LEVEL_MASTER, 'duration_years' => 2, 'name' => ['en' => 'MSc in Computer Science', 'am' => 'የኮምፒውተር ሳይንስ ማስተርስ']],
-            ['code' => 'BSC-SE', 'department_code' => 'SE', 'degree_level' => DEGREE_LEVEL_BACHELOR, 'duration_years' => 5, 'name' => ['en' => 'BSc in Software Engineering', 'am' => 'የሶፍትዌር ምህንድስና ባችለር']],
-            ['code' => 'BSC-EE', 'department_code' => 'EE', 'degree_level' => DEGREE_LEVEL_BACHELOR, 'duration_years' => 5, 'name' => ['en' => 'BSc in Electrical Engineering', 'am' => 'የኤሌክትሪካል ምህንድስና ባችለር']],
+            ['code' => 'BSC-CS', 'department_code' => 'CS', 'degree_level' => DEGREE_LEVEL_BACHELOR, 'study_mode' => STUDY_MODE_REGULAR, 'duration_years' => 4, 'name' => ['en' => 'BSc in Computer Science', 'am' => 'የኮምፒውተር ሳይንስ ባችለር']],
+            ['code' => 'MSC-CS', 'department_code' => 'CS', 'degree_level' => DEGREE_LEVEL_MASTER, 'study_mode' => STUDY_MODE_EXTENSION, 'duration_years' => 2, 'name' => ['en' => 'MSc in Computer Science', 'am' => 'የኮምፒውተር ሳይንስ ማስተርስ']],
+            ['code' => 'BSC-SE', 'department_code' => 'SE', 'degree_level' => DEGREE_LEVEL_BACHELOR, 'study_mode' => STUDY_MODE_REGULAR, 'duration_years' => 5, 'name' => ['en' => 'BSc in Software Engineering', 'am' => 'የሶፍትዌር ምህንድስና ባችለር']],
+            ['code' => 'BSC-EE', 'department_code' => 'EE', 'degree_level' => DEGREE_LEVEL_BACHELOR, 'study_mode' => STUDY_MODE_EVENING, 'duration_years' => 5, 'name' => ['en' => 'BSc in Electrical Engineering', 'am' => 'የኤሌክትሪካል ምህንድስና ባችለር']],
         ];
 
         try {
@@ -60,6 +60,8 @@ class ProgramSeeder extends Seeder {
                     ],
                     'department_id' => $departmentByCode($program['department_code']),
                     'degree_level_lookup_value_id' => $degreeLevelByCode($program['degree_level']),
+                    // Which grid the generator places this programme into.
+                    'study_mode_lookup_value_id' => LookupService::getValueByCode(STUDY_MODE, $program['study_mode'], needId: true),
                     'duration_years' => $program['duration_years'],
                     'is_active' => true,
                     'user_id' => $user->id,

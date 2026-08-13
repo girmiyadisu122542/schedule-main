@@ -24,6 +24,7 @@ use Database\Seeders\Role\RolePermissionSeeder;
 use Database\Seeders\Role\RoleSeeder;
 use Database\Seeders\Role\UserRoleBindingSeeder;
 use Database\Seeders\Schedule\ClassScheduleSeeder;
+use Database\Seeders\Schedule\ScheduleSettingSeeder;
 use Database\Seeders\Schedule\ExamScheduleSeeder;
 use Database\Seeders\User\UserSeeder;
 use Helper\Cache\RoleCacheHandler;
@@ -61,6 +62,7 @@ class DatabaseSeeder extends Seeder {
                 CourseSeeder::class,
                 InstructorSeeder::class,
                 CourseOfferingSeeder::class,
+                ScheduleSettingSeeder::class,
                 ClassScheduleSeeder::class,
                 ExamScheduleSeeder::class,
                 // Availability must exist before duties can draw on it.

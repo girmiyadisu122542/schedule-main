@@ -83,6 +83,20 @@ define('PERMISSION_CANCEL_EXAM_SCHEDULE', 'cancel:exam:schedule');
 define('PERMISSION_SEE_INVIGILATOR_AVAILABILITY', 'see:invigilator:availability');
 define('PERMISSION_SUBMIT_INVIGILATOR_AVAILABILITY', 'submit:invigilator:availability');
 define('PERMISSION_DELETE_INVIGILATOR_AVAILABILITY', 'delete:invigilator:availability');
+/**
+ * The invigilator request/response exchange.
+ *
+ * `send` is separate from `create` so a clerk can prepare an ask that only a
+ * registrar may actually issue. `respond` is the department's side; which
+ * department a user speaks for is a data question answered by
+ * `DepartmentScopeService`, not another permission key.
+ */
+define('PERMISSION_SEE_INVIGILATION_REQUEST', 'see:invigilation:request');
+define('PERMISSION_CREATE_INVIGILATION_REQUEST', 'create:invigilation:request');
+define('PERMISSION_UPDATE_INVIGILATION_REQUEST', 'update:invigilation:request');
+define('PERMISSION_SEND_INVIGILATION_REQUEST', 'send:invigilation:request');
+define('PERMISSION_RESPOND_TO_INVIGILATION_REQUEST', 'respond:to:invigilation:request');
+
 define('PERMISSION_SEE_INVIGILATOR_ASSIGNMENT', 'see:invigilator:assignment');
 define('PERMISSION_ASSIGN_INVIGILATOR', 'assign:invigilator');
 define('PERMISSION_RESPOND_TO_INVIGILATOR_ASSIGNMENT', 'respond:to:invigilator:assignment');
@@ -208,6 +222,27 @@ define('PERMISSION_DELETE_COURSE_OFFERING', 'delete:course:offering');
 define('PERMISSION_SUBMIT_COURSE_OFFERING', 'submit:course:offering');
 define('PERMISSION_APPROVE_COURSE_OFFERING', 'approve:course:offering');
 define('PERMISSION_REJECT_COURSE_OFFERING', 'reject:course:offering');
+
+/**
+ * The cross-department view.
+ *
+ * Everyone else is confined to the departments they head, the college they
+ * lead, or the department they teach in — see
+ * `App\Services\User\DepartmentScopeService`. This key is what lifts that for a
+ * role the institution trusts institution-wide (the Registrar); super admins
+ * are unrestricted without it.
+ */
+define('PERMISSION_SEE_ALL_DEPARTMENTS', 'see:all:departments');
+
+/**
+ * Scheduling configuration — the generation grid per study mode.
+ *
+ * There is no delete key: a grid belongs to a study mode and the modes are a
+ * seeded system vocabulary, so a grid is edited or deactivated, never removed.
+ */
+define('PERMISSION_SEE_SCHEDULE_SETTING', 'see:schedule:setting');
+define('PERMISSION_CREATE_SCHEDULE_SETTING', 'create:schedule:setting');
+define('PERMISSION_UPDATE_SCHEDULE_SETTING', 'update:schedule:setting');
 
 /** Report Related */
 define('PERMISSION_SEE_REPORT', 'see:report');

@@ -71,17 +71,22 @@ class ClassScheduleGeneratorService {
             $rooms = $this->availableRooms();
 
             foreach ($offerings as $offering) {
-                // Re-running a generation must not double-book a semester that
-                // is already partly scheduled.
-                if ($this->alreadyScheduled($offering->id)) {
+                // A meeting that has been announced is not the generator's to
+                // move — re-running must leave published work alone.
+                if ($this->hasCommittedSchedule($offering->id, $draftStatusId)) {
                     $summary['skipped'][] = [
                         'course_offering_id' => $offering->id,
                         'label' => $offering->displayLabel(),
-                        'reason' => 'already_scheduled',
+                        'reason' => 'already_published',
                     ];
 
                     continue;
                 }
+
+                // Drafts ARE the generator's to replace. Clearing them is what
+                // makes re-running actually regenerate: without it a semester
+                // that was generated once could never pick up a changed grid.
+                $this->clearDrafts($offering->id, $draftStatusId);
 
                 $placement = $this->placeOffering($offering, $rooms, $run, $draftStatusId);
                 $scheduledCount += $placement['placed'];
@@ -132,7 +137,9 @@ class ClassScheduleGeneratorService {
         }
 
         return CourseOffering::query()
-            ->with(['course', 'section.program', 'instructor'])
+            // `program` and `section.program` carry the study mode the
+            // generation grid is chosen by.
+            ->with(['course', 'program', 'section.program', 'instructor'])
             ->where('semester_id', $semesterId)
             ->where('status_lookup_value_id', $approvedId)
             ->orderByDesc('expected_students')
@@ -154,16 +161,37 @@ class ClassScheduleGeneratorService {
     }
 
     /**
-     * Whether this offering already has live meetings on the timetable.
+     * Whether this offering has meetings the generator must not touch —
+     * anything live that is past draft.
      *
      * @param int $offeringId
      * @return bool
      */
-    private function alreadyScheduled(int $offeringId): bool {
+    private function hasCommittedSchedule(int $offeringId, int $draftStatusId): bool {
         return ClassSchedule::query()
             ->where('course_offering_id', $offeringId)
             ->where('state', STATE_ACTIVE)
+            ->whereNot('status_lookup_value_id', $draftStatusId)
             ->exists();
+    }
+
+    /**
+     * Discard this offering's draft meetings so they can be re-placed.
+     *
+     * Only drafts, and only live ones: a cancelled meeting is already out of
+     * the way, and a published one was filtered out before we got here.
+     *
+     * @param int $offeringId
+     * @param int $draftStatusId CLASS_SCHEDULE_STATUS value id
+     *
+     * @return void
+     */
+    private function clearDrafts(int $offeringId, int $draftStatusId): void {
+        ClassSchedule::query()
+            ->where('course_offering_id', $offeringId)
+            ->where('state', STATE_ACTIVE)
+            ->where('status_lookup_value_id', $draftStatusId)
+            ->delete();
     }
 
     /**
@@ -323,13 +351,20 @@ class ClassScheduleGeneratorService {
 
         // Days this offering does not meet on yet come first; the rest are a
         // fallback for a course with more sessions than there are teaching days.
+        // The grid comes from the offering's study mode, so an extension
+        // programme is placed at the weekend and a regular one on weekdays.
+        $settings = app(ScheduleSettingService::class);
+        $setting = $settings->forOffering($offering);
+        $teachingDays = $settings->teachingDays($setting);
+        $periods = $settings->periods($setting);
+
         $days = array_merge(
-            array_values(array_diff(ScheduleConstant::TEACHING_DAYS, $usedDays)),
-            array_values(array_intersect(ScheduleConstant::TEACHING_DAYS, $usedDays)),
+            array_values(array_diff($teachingDays, $usedDays)),
+            array_values(array_intersect($teachingDays, $usedDays)),
         );
 
         foreach ($days as $day) {
-            foreach (ScheduleConstant::GENERATION_TIME_SLOTS as $slot) {
+            foreach ($periods as $slot) {
                 foreach ($candidateRooms as $room) {
                     $attributes = [
                         'course_offering_id' => $offering->id,

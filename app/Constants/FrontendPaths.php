@@ -68,6 +68,8 @@ class FrontendPaths {
     public const OFFERING_DETAIL = '/offerings/:uuid';
 
     // Scheduling routes
+    /** The generation grid per study mode — Configuration, not day-to-day work. */
+    public const SCHEDULE_SETTINGS = '/scheduling/settings';
     public const CLASS_SCHEDULES = '/scheduling/classes';
     public const EXAM_SCHEDULES = '/scheduling/exams';
     public const CLASS_SCHEDULE_DETAIL = '/scheduling/classes/:uuid';
@@ -75,6 +77,8 @@ class FrontendPaths {
     public const GENERATION_RUN_DETAIL = '/scheduling/generation-runs/:uuid';
 
     /** Invigilation */
+    /** The registrar asks, departments answer — one screen, both sides. */
+    public const INVIGILATION_REQUESTS = '/invigilation/requests';
     public const INVIGILATOR_AVAILABILITIES = '/invigilation/availabilities';
     public const INVIGILATOR_ASSIGNMENTS = '/invigilation/assignments';
 

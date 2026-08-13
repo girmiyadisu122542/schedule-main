@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Schedule;
 
+use App\Http\Controllers\Concerns\ScopesSchedulesToDepartment;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\ConfirmExamScheduleRequest;
 use App\Http\Requests\Schedule\ExamScheduleRequest;
@@ -19,13 +20,22 @@ use Translation\Message;
  */
 class ExamScheduleController extends Controller {
 
+    use ScopesSchedulesToDepartment;
+
     /** Relations every read needs to render an exam row. */
     private const EAGER = [
         'courseOffering.course',
         'courseOffering.section.program',
+        // Grouping for the master timetable — without these the resource
+        // fields lazy-load one query per row.
+        'courseOffering.department',
+        'courseOffering.program',
         'semester',
         'section.program',
         'room',
+        // The duty names the exam timetable prints.
+        'examInvigilatorAssignments.instructor',
+        'examInvigilatorAssignments.role',
         'status',
         'examType',
         'createdBy',
@@ -48,6 +58,8 @@ class ExamScheduleController extends Controller {
 
         $schedules = ExamSchedule::query()
             ->with(self::EAGER)
+            // Other departments are not this caller's to read.
+            ->tap(fn ($query) => $this->applyDepartmentScope($query))
             ->when($search, function ($query) use ($search) {
                 $query
                     ->where(function ($query) use ($search) {
@@ -59,6 +71,26 @@ class ExamScheduleController extends Controller {
             })
             ->when($request->input('semester_id'), fn ($query) => $query->where('semester_id', (int) $request->input('semester_id')))
             ->when($request->input('course_offering_id'), fn ($query) => $query->where('course_offering_id', (int) $request->input('course_offering_id')))
+            // The academic hierarchy — a sitting reaches it through its
+            // offering, which is where ownership lives (Final Schema.md §12).
+            ->when($request->input('college_id'), fn ($query) => $query->whereHas(
+                'courseOffering.department',
+                fn ($offering) => $offering->where('college_id', (int) $request->input('college_id')),
+            ))
+            ->when($request->input('department_id'), fn ($query) => $query->whereHas(
+                'courseOffering',
+                fn ($offering) => $offering->where('department_id', (int) $request->input('department_id')),
+            ))
+            // The offering's own program is nullable, and the cohort carries
+            // the authoritative one — match either, or a section-scoped
+            // offering would drop out of its own programme's calendar.
+            ->when($request->input('program_id'), function ($query) use ($request) {
+                $programId = (int) $request->input('program_id');
+
+                $query->whereHas('courseOffering', fn ($offering) => $offering
+                    ->where('program_id', $programId)
+                    ->orWhereHas('section', fn ($section) => $section->where('program_id', $programId)));
+            })
             ->when($request->input('section_id'), fn ($query) => $query->where('section_id', (int) $request->input('section_id')))
             ->when($request->input('room_id'), fn ($query) => $query->where('room_id', (int) $request->input('room_id')))
             ->when($request->input('exam_date'), fn ($query) => $query->whereDate('exam_date', $request->input('exam_date')))
@@ -89,6 +121,7 @@ class ExamScheduleController extends Controller {
 
         $schedule = ExamSchedule::query()
             ->with(self::EAGER)
+            ->tap(fn ($query) => $this->applyDepartmentScope($query))
             ->when(ctype_digit((string) $key), fn ($query) => $query->where('id', (int) $key))
             ->when(!ctype_digit((string) $key), fn ($query) => $query->where('uuid', $key))
             ->first();
@@ -109,6 +142,10 @@ class ExamScheduleController extends Controller {
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(ExamScheduleRequest $request): JsonResponse {
+        if (!$this->scopeAllowsOffering((int) $request->input('course_offering_id'))) {
+            return Response::_403();
+        }
+
         try {
             $result = app(ExamScheduleService::class)->createSchedule($request->validated());
         } catch (\Exception $exception) {
@@ -134,9 +171,13 @@ class ExamScheduleController extends Controller {
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(ExamScheduleRequest $request, $id): JsonResponse {
-        $schedule = ExamSchedule::with('status')->find($id);
+        $schedule = ExamSchedule::with(['status', 'courseOffering'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('exam_schedule_not_found'));
+        }
+
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
         }
 
         try {
@@ -172,6 +213,10 @@ class ExamScheduleController extends Controller {
             return Response::_404(Message::get('exam_schedule_not_found'));
         }
 
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
+        }
+
         if (!$schedule->isDraft()) {
             return Response::_422(Message::get('only_draft_exams_can_be_deleted'));
         }
@@ -203,6 +248,10 @@ class ExamScheduleController extends Controller {
         $schedule = ExamSchedule::with(['status', 'examType', 'courseOffering.course', 'courseOffering.section.program'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('exam_schedule_not_found'));
+        }
+
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
         }
 
         try {
@@ -241,6 +290,10 @@ class ExamScheduleController extends Controller {
             return Response::_404(Message::get('exam_schedule_not_found'));
         }
 
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
+        }
+
         try {
             $result = app(ExamScheduleService::class)->publish($schedule);
         } catch (\Exception $exception) {
@@ -272,6 +325,10 @@ class ExamScheduleController extends Controller {
         $schedule = ExamSchedule::with(['status', 'examType', 'courseOffering.course', 'courseOffering.section.program'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('exam_schedule_not_found'));
+        }
+
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
         }
 
         try {

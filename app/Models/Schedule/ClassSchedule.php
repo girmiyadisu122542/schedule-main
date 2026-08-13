@@ -230,6 +230,11 @@ class ClassSchedule extends ScopedModel {
             Field::makeResource('course_offering', 'courseOffering', fields: 'idAndNameFields'),
             Field::makeResource('semester', fields: 'idAndNameFields'),
             Field::makeResource('section', fields: 'idAndNameFields'),
+            // Ownership, one hop through the offering (Final Schema.md §12).
+            // The master timetable groups its rows by these; the section's own
+            // label already NAMES the programme but carries no id to group on.
+            Field::makeResource('department', 'courseOffering.department', fields: 'idAndNameFields'),
+            Field::makeResource('program', 'courseOffering.program', fields: 'idAndNameFields'),
             Field::makeResource('instructor', fields: 'idAndNameFields'),
             Field::makeResource('room', fields: 'idAndNameFields'),
             Field::makeResource('created_by', 'createdBy', fields: 'idAndNameFields'),

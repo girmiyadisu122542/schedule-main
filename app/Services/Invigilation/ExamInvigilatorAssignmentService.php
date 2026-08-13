@@ -3,6 +3,7 @@
 namespace App\Services\Invigilation;
 
 use App\Models\Invigilation\ExamInvigilatorAssignment;
+use App\Models\Invigilation\InvigilationSubmission;
 use App\Models\Invigilation\InvigilatorAvailability;
 use App\Models\People\Instructor;
 use App\Models\Schedule\ExamSchedule;
@@ -376,7 +377,42 @@ class ExamInvigilatorAssignmentService {
      * @param \App\Models\Schedule\ExamSchedule $exam
      * @return \Illuminate\Support\Collection
      */
+    /**
+     * The instructors departments have submitted for this exam's scope.
+     *
+     * An exam belongs to a semester and an exam type; a request covers exactly
+     * that pair. Only a `sent` or `closed` request counts — a draft has not
+     * been asked yet, while a closed one keeps the people it collected.
+     *
+     * @param \App\Models\Schedule\ExamSchedule $exam
+     * @return \Illuminate\Support\Collection
+     */
+    private function submittedFor(ExamSchedule $exam): Collection {
+        return InvigilationSubmission::query()
+            ->whereHas('requestDepartment.request', fn ($query) => $query
+                ->where('semester_id', $exam->semester_id)
+                ->where('exam_type_lookup_value_id', $exam->exam_type_lookup_value_id)
+                ->whereHas('status', fn ($status) => $status->whereIn('code', [
+                    INVIGILATION_REQUEST_STATUS_SENT,
+                    INVIGILATION_REQUEST_STATUS_CLOSED,
+                ])))
+            ->whereHas('instructor', fn ($query) => $query->where('can_invigilate', true)->where('is_active', true))
+            ->pluck('instructor_id')
+            ->unique()
+            ->values();
+    }
+
     private function candidatesFor(ExamSchedule $exam): Collection {
+        // The pool is whoever the departments actually SENT for this
+        // examination scope — not every member of staff who happens to exist.
+        $submitted = $this->submittedFor($exam);
+
+        // Nothing submitted for this scope means the request workflow has not
+        // been used here. Fall back to the availability windows so an
+        // institution that has not adopted requests yet still gets a staffed
+        // exam timetable rather than a silently empty one.
+        $pool = $submitted->isNotEmpty() ? $submitted : null;
+
         $available = InvigilatorAvailability::query()
             ->where('available_date', $exam->exam_date)
             // Containment, not overlap: a window that only half covers the
@@ -387,6 +423,22 @@ class ExamInvigilatorAssignmentService {
             ->pluck('instructor_id')
             ->unique()
             ->values();
+
+        if ($pool !== null) {
+            // A submitted person with no availability window is available for
+            // the whole examination period — departments send PEOPLE, and only
+            // narrow them to windows when someone is genuinely part-time.
+            $windowed = InvigilatorAvailability::query()
+                ->whereIn('instructor_id', $pool)
+                ->where('semester_id', $exam->semester_id)
+                ->pluck('instructor_id')
+                ->unique();
+
+            $available = $pool
+                ->filter(fn (int $instructorId): bool => !$windowed->contains($instructorId)
+                    || $available->contains($instructorId))
+                ->values();
+        }
 
         if ($available->isEmpty()) {
             return $available;

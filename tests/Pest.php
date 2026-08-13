@@ -4,11 +4,21 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
-require_once __DIR__ . '/TestHelper/Constants.php';
-require_once __DIR__ . '/TestHelper/DataGenerator/PayloadMutator.php';
+// These two ship with the feature-test fixtures and are not in this repository.
+// Requiring them unconditionally made `pest` die before collecting a single
+// test, which is why the suite has never run here. Guarded, the unit tests run
+// and the feature helpers below still light up wherever the fixtures exist.
+foreach (['/TestHelper/Constants.php', '/TestHelper/DataGenerator/PayloadMutator.php'] as $helper) {
+    if (file_exists(__DIR__ . $helper)) {
+        require_once __DIR__ . $helper;
+    }
+}
 
 uses(TestCase::class)->in('Feature', 'Unit', '../modules/*/tests/Feature', '../modules/*/tests/Unit');
-uses(DatabaseTransactions::class)->in('Feature', 'Unit', '../modules/*/tests/Feature', '../modules/*/tests/Unit');
+// Only the feature tests touch the database. Binding a transaction around the
+// unit tests would make every pure-logic assertion need a live PostgreSQL
+// connection to run at all.
+uses(DatabaseTransactions::class)->in('Feature', '../modules/*/tests/Feature');
 
 /**
  * Helper to test authorized access for various HTTP methods.

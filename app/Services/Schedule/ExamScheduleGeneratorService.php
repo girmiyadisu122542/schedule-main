@@ -7,6 +7,7 @@ use App\Models\Academic\Semester;
 use App\Models\Offering\CourseOffering;
 use App\Models\Physical\Room;
 use App\Models\Schedule\ExamSchedule;
+use App\Models\Schedule\ScheduleSetting;
 use App\Models\Schedule\ScheduleGenerationRun;
 use App\Services\Lookup\LookupService;
 use Constants\AppConstant;
@@ -24,6 +25,13 @@ use Illuminate\Support\Facades\DB;
  * decide whether it holds. There is no conflict detector in PHP.
  */
 class ExamScheduleGeneratorService {
+
+    /**
+     * Exam dates already worked out this run, keyed by setting id.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private array $dateCache = [];
 
     /**
      * Run automatic exam scheduling for a semester.
@@ -60,8 +68,10 @@ class ExamScheduleGeneratorService {
             return 'no_approved_offerings_to_schedule';
         }
 
-        $dates = $this->examDates($semester);
-        if (empty($dates)) {
+        // Exam days now come from the study mode, so the date list is resolved
+        // per offering rather than once for the semester. This only checks that
+        // the semester has an exam period at all.
+        if (empty($this->examDates($semester, null))) {
             return 'semester_has_no_exam_period';
         }
 
@@ -81,17 +91,21 @@ class ExamScheduleGeneratorService {
                 // The composite unique already forbids a second sitting of the
                 // same type, but reporting it as "skipped" beats reporting it
                 // as a failure — nothing is wrong.
-                if ($this->alreadyScheduled($offering->id, $examTypeId)) {
+                if ($this->hasCommittedSitting($offering->id, $examTypeId, $draftStatusId)) {
                     $summary['skipped'][] = [
                         'course_offering_id' => $offering->id,
                         'label' => $offering->displayLabel(),
-                        'reason' => 'already_scheduled',
+                        'reason' => 'already_published',
                     ];
 
                     continue;
                 }
 
-                $placement = $this->placeSitting($offering, $rooms, $dates, $run, $examTypeId, $draftStatusId);
+                // Drafts are the generator's to replace — this is what lets a
+                // changed exam grid or a changed course duration take effect.
+                $this->clearDraftSittings($offering->id, $examTypeId, $draftStatusId);
+
+                $placement = $this->placeSitting($offering, $rooms, $semester, $run, $examTypeId, $draftStatusId);
 
                 if ($placement['date'] !== null) {
                     $scheduledCount++;
@@ -140,7 +154,9 @@ class ExamScheduleGeneratorService {
         }
 
         return CourseOffering::query()
-            ->with(['course', 'section.program'])
+            // `program` / `section.program` carry the study mode the exam grid
+            // is chosen by; `course` carries this exam's own length.
+            ->with(['course', 'program', 'section.program'])
             ->where('semester_id', $semesterId)
             ->where('status_lookup_value_id', $approvedId)
             ->orderByDesc('expected_students')
@@ -168,9 +184,19 @@ class ExamScheduleGeneratorService {
      * @param \App\Models\Academic\Semester $semester
      * @return array<int, string>
      */
-    private function examDates(Semester $semester): array {
+    private function examDates(Semester $semester, ?ScheduleSetting $setting): array {
+        $settings = app(ScheduleSettingService::class);
+        $examDays = $settings->examDays($setting);
+
+        // Cache per setting: every offering on the same study mode walks the
+        // same calendar, and a semester has hundreds of offerings.
+        $cacheKey = (string) ($setting?->id ?? 'default');
+        if (array_key_exists($cacheKey, $this->dateCache)) {
+            return $this->dateCache[$cacheKey];
+        }
+
         $end = Carbon::parse($semester->end_date);
-        $start = $end->copy()->subDays(ScheduleConstant::EXAM_PERIOD_DAYS);
+        $start = $end->copy()->subDays($settings->examPeriodDays($setting));
 
         // A semester shorter than the exam period still gets one: start no
         // earlier than the semester itself.
@@ -181,14 +207,17 @@ class ExamScheduleGeneratorService {
 
         $dates = [];
         for ($date = $start->copy(); $date->lessThanOrEqualTo($end); $date->addDay()) {
-            if ($date->dayOfWeekIso === ScheduleConstant::DAY_SUNDAY) {
+            // The configured exam days, not a hardcoded "skip Sunday" — an
+            // institution may examine at the weekend, and the weekend intake
+            // examines when it is actually on campus.
+            if (!in_array($date->dayOfWeekIso, $examDays, true)) {
                 continue;
             }
 
             $dates[] = $date->toDateString();
         }
 
-        return $dates;
+        return $this->dateCache[$cacheKey] = $dates;
     }
 
     /**
@@ -199,12 +228,35 @@ class ExamScheduleGeneratorService {
      *
      * @return bool
      */
-    private function alreadyScheduled(int $offeringId, int $examTypeId): bool {
+    private function hasCommittedSitting(int $offeringId, int $examTypeId, int $draftStatusId): bool {
         return ExamSchedule::query()
             ->where('course_offering_id', $offeringId)
             ->where('exam_type_lookup_value_id', $examTypeId)
             ->where('state', STATE_ACTIVE)
+            ->whereNot('status_lookup_value_id', $draftStatusId)
             ->exists();
+    }
+
+    /**
+     * Discard this offering's draft sittings of one exam type so they can be
+     * re-placed.
+     *
+     * Only drafts: a sitting that has gone to the department for confirmation,
+     * or been published, is not the generator's to withdraw.
+     *
+     * @param int $offeringId
+     * @param int $examTypeId EXAM_TYPE value id
+     * @param int $draftStatusId EXAM_SCHEDULE_STATUS value id
+     *
+     * @return void
+     */
+    private function clearDraftSittings(int $offeringId, int $examTypeId, int $draftStatusId): void {
+        ExamSchedule::query()
+            ->where('course_offering_id', $offeringId)
+            ->where('exam_type_lookup_value_id', $examTypeId)
+            ->where('state', STATE_ACTIVE)
+            ->where('status_lookup_value_id', $draftStatusId)
+            ->delete();
     }
 
     /**
@@ -284,7 +336,7 @@ class ExamScheduleGeneratorService {
      *
      * @return array{date: string|null, reason: string|null}
      */
-    private function placeSitting(CourseOffering $offering, Collection $rooms, array $dates, ScheduleGenerationRun $run, int $examTypeId, int $draftStatusId): array {
+    private function placeSitting(CourseOffering $offering, Collection $rooms, Semester $semester, ScheduleGenerationRun $run, int $examTypeId, int $draftStatusId): array {
         $candidateRooms = $rooms->filter(
             fn (Room $room): bool => ($room->exam_capacity ?? $room->capacity) >= $offering->expected_students
         )->values();
@@ -293,10 +345,22 @@ class ExamScheduleGeneratorService {
             return ['date' => null, 'reason' => 'no_exam_venue_large_enough'];
         }
 
+        // The grid comes from the offering's study mode; the LENGTH comes from
+        // its course, so a two-hour paper and a three-hour paper get different
+        // windows out of the same exam day.
+        $settings = app(ScheduleSettingService::class);
+        $setting = $settings->forOffering($offering);
+        $dates = $this->examDates($semester, $setting);
+        $windows = $settings->examWindows($setting, $settings->examDurationFor($offering, $setting));
+
+        if (empty($dates) || empty($windows)) {
+            return ['date' => null, 'reason' => 'semester_has_no_exam_period'];
+        }
+
         $lastConflict = 'no_free_exam_slot_found';
 
         foreach ($dates as $date) {
-            foreach (ScheduleConstant::EXAM_TIME_SLOTS as $slot) {
+            foreach ($windows as $slot) {
                 foreach ($candidateRooms as $room) {
                     $attributes = [
                         'course_offering_id' => $offering->id,

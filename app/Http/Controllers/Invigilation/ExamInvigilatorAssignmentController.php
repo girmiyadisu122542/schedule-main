@@ -26,6 +26,9 @@ class ExamInvigilatorAssignmentController extends Controller {
     private const EAGER = [
         'examSchedule.courseOffering.course',
         'examSchedule.examType',
+        // The roster prints the hall, so the embed needs it loaded.
+        'examSchedule.room',
+        'instructor.department',
         'instructor',
         'role',
         'status',

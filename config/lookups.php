@@ -98,6 +98,24 @@ return [
     ],
 
     [
+        'name' => ['en' => 'Study Mode', 'am' => 'የትምህርት ዘዴ'],
+        'code' => STUDY_MODE,
+        'description' => [
+            'en' => 'How a program is delivered — decides which days and hours it may be scheduled in',
+            'am' => 'አንድ ፕሮግራም የሚሰጥበት መንገድ — በየትኞቹ ቀናትና ሰዓታት እንደሚመደብ ይወስናል',
+        ],
+        'applies_to_model' => [MODEL_PROGRAM],
+        'is_system' => true,
+        'values' => [
+            ['name' => ['en' => 'Regular', 'am' => 'መደበኛ'], 'code' => STUDY_MODE_REGULAR, 'order' => 1, 'color' => '#2563EB', 'is_default' => true],
+            ['name' => ['en' => 'Extension', 'am' => 'ኤክስቴንሽን'], 'code' => STUDY_MODE_EXTENSION, 'order' => 2, 'color' => '#7C3AED'],
+            ['name' => ['en' => 'Evening', 'am' => 'ማታ'], 'code' => STUDY_MODE_EVENING, 'order' => 3, 'color' => '#0EA5E9'],
+            ['name' => ['en' => 'Summer', 'am' => 'የበጋ'], 'code' => STUDY_MODE_SUMMER, 'order' => 4, 'color' => '#F59E0B'],
+            ['name' => ['en' => 'Distance', 'am' => 'የርቀት'], 'code' => STUDY_MODE_DISTANCE, 'order' => 5, 'color' => '#14B8A6'],
+        ],
+    ],
+
+    [
         'name' => ['en' => 'Academic Rank', 'am' => 'የትምህርት ማዕረግ'],
         'code' => ACADEMIC_RANK,
         'description' => ['en' => 'Academic ladder position an instructor holds', 'am' => 'መምህሩ የያዘው የትምህርት ማዕረግ ደረጃ'],
@@ -316,6 +334,28 @@ return [
             ['name' => ['en' => 'Running', 'am' => 'በሂደት ላይ'], 'code' => GENERATION_STATUS_RUNNING, 'order' => 1, 'color' => '#F59E0B', 'icon' => 'clock', 'is_default' => true],
             ['name' => ['en' => 'Completed', 'am' => 'ተጠናቋል'], 'code' => GENERATION_STATUS_COMPLETED, 'order' => 2, 'color' => '#10B981', 'icon' => 'check-circle'],
             ['name' => ['en' => 'Failed', 'am' => 'አልተሳካም'], 'code' => GENERATION_STATUS_FAILED, 'order' => 3, 'color' => '#EF4444', 'icon' => 'x-circle'],
+        ],
+    ],
+
+    [
+        'name' => ['en' => 'Invigilation Request Status', 'am' => 'የፈታኝ ጥያቄ ሁኔታ'],
+        'code' => INVIGILATION_REQUEST_STATUS,
+        'description' => [
+            'en' => 'Where a registrar request for invigilators has got to',
+            'am' => 'የመዝጋቢው የፈታኝ ጥያቄ የደረሰበት ደረጃ',
+        ],
+        'applies_to_model' => [MODEL_INVIGILATION_REQUEST],
+        'is_system' => true,
+        'values' => [
+            ['name' => ['en' => 'Draft', 'am' => 'ረቂቅ'], 'code' => INVIGILATION_REQUEST_STATUS_DRAFT, 'order' => 1, 'color' => '#6B7280', 'is_default' => true],
+            ['name' => ['en' => 'Sent', 'am' => 'ተልኳል'], 'code' => INVIGILATION_REQUEST_STATUS_SENT, 'order' => 2, 'color' => '#2563EB'],
+            ['name' => ['en' => 'Closed', 'am' => 'ተዘግቷል'], 'code' => INVIGILATION_REQUEST_STATUS_CLOSED, 'order' => 3, 'color' => '#059669'],
+        ],
+        // A request is sent once and then closed; there is no way back, because
+        // a department that has already submitted people cannot un-see the ask.
+        'transitions' => [
+            ['from' => INVIGILATION_REQUEST_STATUS_DRAFT, 'to' => INVIGILATION_REQUEST_STATUS_SENT],
+            ['from' => INVIGILATION_REQUEST_STATUS_SENT, 'to' => INVIGILATION_REQUEST_STATUS_CLOSED],
         ],
     ],
 

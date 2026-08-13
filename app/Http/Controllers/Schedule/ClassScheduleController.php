@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Schedule;
 
+use App\Http\Controllers\Concerns\ScopesSchedulesToDepartment;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\ClassScheduleRequest;
 use App\Models\Schedule\ClassSchedule;
@@ -18,10 +19,16 @@ use Translation\Message;
  */
 class ClassScheduleController extends Controller {
 
+    use ScopesSchedulesToDepartment;
+
     /** Relations every read needs to render a timetable row. */
     private const EAGER = [
         'courseOffering.course',
         'courseOffering.section.program',
+        // Grouping for the master timetable — without these the resource
+        // fields lazy-load one query per row.
+        'courseOffering.department',
+        'courseOffering.program',
         'semester',
         'section.program',
         'instructor',
@@ -47,6 +54,8 @@ class ClassScheduleController extends Controller {
 
         $schedules = ClassSchedule::query()
             ->with(self::EAGER)
+            // Other departments are not this caller's to read.
+            ->tap(fn ($query) => $this->applyDepartmentScope($query))
             ->when($search, function ($query) use ($search) {
                 $query
                     ->where(function ($query) use ($search) {
@@ -58,6 +67,26 @@ class ClassScheduleController extends Controller {
             })
             ->when($request->input('semester_id'), fn ($query) => $query->where('semester_id', (int) $request->input('semester_id')))
             ->when($request->input('course_offering_id'), fn ($query) => $query->where('course_offering_id', (int) $request->input('course_offering_id')))
+            // The academic hierarchy — a meeting reaches it through its
+            // offering, which is where ownership lives (Final Schema.md §12).
+            ->when($request->input('college_id'), fn ($query) => $query->whereHas(
+                'courseOffering.department',
+                fn ($offering) => $offering->where('college_id', (int) $request->input('college_id')),
+            ))
+            ->when($request->input('department_id'), fn ($query) => $query->whereHas(
+                'courseOffering',
+                fn ($offering) => $offering->where('department_id', (int) $request->input('department_id')),
+            ))
+            // The offering's own program is nullable, and the cohort carries
+            // the authoritative one — match either, or a section-scoped
+            // offering would drop out of its own programme's timetable.
+            ->when($request->input('program_id'), function ($query) use ($request) {
+                $programId = (int) $request->input('program_id');
+
+                $query->whereHas('courseOffering', fn ($offering) => $offering
+                    ->where('program_id', $programId)
+                    ->orWhereHas('section', fn ($section) => $section->where('program_id', $programId)));
+            })
             ->when($request->input('section_id'), fn ($query) => $query->where('section_id', (int) $request->input('section_id')))
             ->when($request->input('instructor_id'), fn ($query) => $query->where('instructor_id', (int) $request->input('instructor_id')))
             ->when($request->input('room_id'), fn ($query) => $query->where('room_id', (int) $request->input('room_id')))
@@ -88,6 +117,7 @@ class ClassScheduleController extends Controller {
 
         $schedule = ClassSchedule::query()
             ->with(self::EAGER)
+            ->tap(fn ($query) => $this->applyDepartmentScope($query))
             ->when(ctype_digit((string) $key), fn ($query) => $query->where('id', (int) $key))
             ->when(!ctype_digit((string) $key), fn ($query) => $query->where('uuid', $key))
             ->first();
@@ -108,6 +138,10 @@ class ClassScheduleController extends Controller {
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(ClassScheduleRequest $request): JsonResponse {
+        if (!$this->scopeAllowsOffering((int) $request->input('course_offering_id'))) {
+            return Response::_403();
+        }
+
         try {
             $result = app(ClassScheduleService::class)->createSchedule($request->validated());
         } catch (\Exception $exception) {
@@ -133,9 +167,13 @@ class ClassScheduleController extends Controller {
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(ClassScheduleRequest $request, $id): JsonResponse {
-        $schedule = ClassSchedule::with('status')->find($id);
+        $schedule = ClassSchedule::with(['status', 'courseOffering'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('class_schedule_not_found'));
+        }
+
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
         }
 
         try {
@@ -171,6 +209,10 @@ class ClassScheduleController extends Controller {
             return Response::_404(Message::get('class_schedule_not_found'));
         }
 
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
+        }
+
         if (!$schedule->isDraft()) {
             return Response::_422(Message::get('only_draft_schedules_can_be_deleted'));
         }
@@ -204,6 +246,10 @@ class ClassScheduleController extends Controller {
             return Response::_404(Message::get('class_schedule_not_found'));
         }
 
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
+        }
+
         try {
             $result = app(ClassScheduleService::class)->publish($schedule);
         } catch (\Exception $exception) {
@@ -235,6 +281,10 @@ class ClassScheduleController extends Controller {
         $schedule = ClassSchedule::with(['status', 'courseOffering.course', 'courseOffering.section.program'])->find($id);
         if (!$schedule) {
             return Response::_404(Message::get('class_schedule_not_found'));
+        }
+
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
         }
 
         try {

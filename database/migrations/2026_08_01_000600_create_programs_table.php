@@ -28,6 +28,7 @@ return new class extends Migration {
 
             $table->foreignId('department_id')->constrained(Department::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('degree_level_lookup_value_id')->constrained(LookupValue::getTableName())->restrictOnUpdate()->restrictOnDelete();
+            $table->foreignId('study_mode_lookup_value_id')->nullable()->constrained(LookupValue::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('user_id')->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
 
             $table->index(['department_id', 'is_active']);

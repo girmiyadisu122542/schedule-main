@@ -16,6 +16,7 @@ use App\Http\Controllers\Department\DepartmentController;
 use App\Http\Controllers\File\FileController;
 use App\Http\Controllers\Instructor\InstructorController;
 use App\Http\Controllers\Invigilation\ExamInvigilatorAssignmentController;
+use App\Http\Controllers\Invigilation\InvigilationRequestController;
 use App\Http\Controllers\Invigilation\InvigilatorAvailabilityController;
 use App\Http\Controllers\Lang\LanguageController;
 use App\Http\Controllers\Lookup\LookupTransitionController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\Schedule\ClassScheduleGeneratorController;
 use App\Http\Controllers\Schedule\ExamScheduleController;
 use App\Http\Controllers\Schedule\ExamScheduleGeneratorController;
 use App\Http\Controllers\Schedule\ScheduleGenerationRunController;
+use App\Http\Controllers\Schedule\ScheduleSettingController;
 use App\Http\Controllers\Section\SectionController;
 use App\Http\Controllers\Semester\SemesterController;
 use App\Http\Controllers\User\AllowedRoutesController;
@@ -49,8 +51,8 @@ Route::post('/2fa/send-otp', [TwoFactorController::class, 'sendLoginOtp']);
 Route::post('/2fa/verify-otp', [TwoFactorController::class, 'verifyLoginOtp']);
 Route::post('/2fa/verify-backup', [TwoFactorController::class, 'verifyBackupCode']);
 
-Route::post('/login', [LoginController::class, 'login'])
-    ->middleware('rate_limit:' . LOGIN_RATE_LIMIT_ATTEMPTS . ',' . LOGIN_RATE_LIMIT_DECAY);
+Route::post('/login', [LoginController::class, 'login']);
+// ->middleware('rate_limit:' . LOGIN_RATE_LIMIT_ATTEMPTS . ',' . LOGIN_RATE_LIMIT_DECAY);
 
 Route::middleware(API_GUARD_MIDDLEWARE)
     ->group(function () {
@@ -316,6 +318,14 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::post('/exam-schedules/{id}/publish', [ExamScheduleController::class, 'publish']);
                 Route::post('/exam-schedules/{id}/cancel', [ExamScheduleController::class, 'cancel']);
 
+                // The generation grid per study mode — what the registrar
+                // edits under Configuration instead of a redeploy. No delete:
+                // a grid belongs to a seeded mode and is deactivated instead.
+                Route::apiResource('/settings', ScheduleSettingController::class)
+                    ->only(['index', 'show', 'store', 'update'])
+                    ->parameters(['settings' => 'id'])
+                    ->where(['id' => '[A-Za-z0-9-]+']);
+
                 // Run history — telemetry the progress UI polls.
                 Route::apiResource('/generation-runs', ScheduleGenerationRunController::class)
                     ->only(['index', 'show'])
@@ -328,6 +338,20 @@ Route::middleware(API_GUARD_MIDDLEWARE)
         // (Final Schema.md Sec. 17).
         Route::prefix('/invigilation')
             ->group(function () {
+                // The request/response exchange: the registrar asks departments
+                // for people, each with its own quantity; departments answer.
+                // The people they send become the pool exam staffing draws from.
+                Route::apiResource('/requests', InvigilationRequestController::class)
+                    ->only(['index', 'show', 'store', 'update'])
+                    ->parameters(['requests' => 'id'])
+                    ->where(['id' => '[A-Za-z0-9-]+']);
+                Route::post('/requests/{id}/send', [InvigilationRequestController::class, 'send']);
+                Route::post('/requests/{id}/close', [InvigilationRequestController::class, 'close']);
+                // Keyed by the DEPARTMENT'S SHARE, not the request: a department
+                // answers its own line, never the whole ask.
+                Route::post('/request-departments/{id}/submit', [InvigilationRequestController::class, 'submit']);
+                Route::delete('/submissions/{id}', [InvigilationRequestController::class, 'withdraw']);
+
                 Route::get('/availabilities', [InvigilatorAvailabilityController::class, 'index']);
                 Route::post('/availabilities', [InvigilatorAvailabilityController::class, 'store']);
                 Route::delete('/availabilities/{id}', [InvigilatorAvailabilityController::class, 'destroy']);

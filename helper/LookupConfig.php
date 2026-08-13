@@ -47,6 +47,21 @@ define('ACADEMIC_RANK_ASSOCIATE_PROFESSOR', 'associate_professor');
 define('ACADEMIC_RANK_PROFESSOR', 'professor');
 define('ACADEMIC_RANK_TECHNICAL_ASSISTANT', 'technical_assistant');
 
+/**
+ * How a programme is delivered, which is what decides WHEN it may be taught.
+ *
+ * Regular students sit Monday–Friday in the day; extension students are the
+ * weekend intake; evening runs late on weekdays. Each mode carries its own
+ * teaching days and daily grid in `schedule_settings`, so the generator asks
+ * the programme what kind it is rather than assuming one timetable for all.
+ */
+define('STUDY_MODE', 'STUDY_MODE');
+define('STUDY_MODE_REGULAR', 'regular');
+define('STUDY_MODE_EXTENSION', 'extension');
+define('STUDY_MODE_EVENING', 'evening');
+define('STUDY_MODE_SUMMER', 'summer');
+define('STUDY_MODE_DISTANCE', 'distance');
+
 define('SEMESTER_STATUS', 'SEMESTER_STATUS');
 define('SEMESTER_STATUS_PLANNING', 'planning');
 define('SEMESTER_STATUS_SCHEDULING', 'scheduling');
@@ -122,6 +137,19 @@ define('GENERATION_STATUS', 'GENERATION_STATUS');
 define('GENERATION_STATUS_RUNNING', 'running');
 define('GENERATION_STATUS_COMPLETED', 'completed');
 define('GENERATION_STATUS_FAILED', 'failed');
+
+/**
+ * Where a registrar's invigilator request has got to.
+ *
+ * `draft` is the registrar still deciding which departments to ask and for how
+ * many; `sent` is the departments' cue to respond, and the only state in which
+ * a submission is accepted; `closed` ends the exchange whether or not every
+ * department filled its quota.
+ */
+define('INVIGILATION_REQUEST_STATUS', 'INVIGILATION_REQUEST_STATUS');
+define('INVIGILATION_REQUEST_STATUS_DRAFT', 'draft');
+define('INVIGILATION_REQUEST_STATUS_SENT', 'sent');
+define('INVIGILATION_REQUEST_STATUS_CLOSED', 'closed');
 
 define('INVIGILATOR_ROLE', 'INVIGILATOR_ROLE');
 define('INVIGILATOR_ROLE_CHIEF', 'chief');

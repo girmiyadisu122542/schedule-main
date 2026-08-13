@@ -224,6 +224,14 @@ class CourseOffering extends ScopedModel {
             Field::id(),
             Field::uuid(),
             Field::name(fn ($data) => $data->displayLabel()),
+            // The parts, alongside the composed label. A timetable identifies a
+            // course by its CODE — it prints bare on a wall chart where nobody
+            // has room for the title — while a detail page wants the title and
+            // a dropdown wants the whole label. Emitting all three lets each
+            // screen choose instead of splitting a string apart.
+            Field::courseCode('course.code'),
+            Field::courseTitle('course.title__localized'),
+            Field::sectionLabel(fn ($data) => $data->section?->displayLabel()),
         ];
     }
 }

@@ -22,6 +22,9 @@ return SideBar::create([
                 SideBarItem::instructors('UserIcon', FrontendPaths::INSTRUCTORS),
                 SideBarItem::sections('BusinessChart', FrontendPaths::SECTIONS),
                 SideBarItem::courses('BookIcon', FrontendPaths::COURSES),
+                // The generation grid: teaching days, day window, period
+                // length and lunch — one per study mode.
+                SideBarItem::scheduleSettings('ClockTimeTimerArrow', FrontendPaths::SCHEDULE_SETTINGS),
             ]),
             SideBarItem::courseOfferings('FileText', FrontendPaths::OFFERINGS),
             SideBarItem::scheduling('ClockTimeTimerArrow', null, [
@@ -31,6 +34,7 @@ return SideBar::create([
                 SideBarItem::examCalendar('date', FrontendPaths::EXAM_CALENDAR),
             ]),
             SideBarItem::invigilation('ShieldCheckAltIcon', null, [
+                SideBarItem::invigilationRequests('SendPlaneIcon', FrontendPaths::INVIGILATION_REQUESTS),
                 SideBarItem::invigilatorAvailabilities('UserCheckIcon', FrontendPaths::INVIGILATOR_AVAILABILITIES),
                 SideBarItem::invigilatorAssignments('ShieldCheckAltIcon', FrontendPaths::INVIGILATOR_ASSIGNMENTS),
             ]),

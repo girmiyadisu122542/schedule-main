@@ -25,6 +25,9 @@ class Course extends ScopedModel {
         'title' => 'array',
         'description' => 'array',
         'is_active' => 'boolean',
+        // Nullable — a course with no exam length of its own sits the study
+        // mode's default, so this must stay null rather than cast to 0.
+        'exam_duration_minutes' => 'integer',
     ];
 
     /**
@@ -45,6 +48,7 @@ class Course extends ScopedModel {
         'lab_hours_per_week',
         'tutorial_hours_per_week',
         'sessions_per_week',
+        'exam_duration_minutes',
         'is_active',
         'user_id',
     ];
@@ -111,6 +115,7 @@ class Course extends ScopedModel {
             Field::labHoursPerWeek()->asDouble(),
             Field::tutorialHoursPerWeek()->asDouble(),
             Field::sessionsPerWeek()->asInt(),
+            Field::examDurationMinutes()->asInt(),
             Field::isActive()->asBool(),
             // The type chip reads `course_type_code` + the lookup's own colour.
             Field::courseTypeCode('courseType.code'),

@@ -38,6 +38,13 @@ class ProgramRequest extends FormRequest {
                 Program::unique('code', $this->route('id')),
             ],
             'department_id' => ['required', 'integer', Department::exists()],
+            // Which grid this programme is scheduled into. Nullable — a
+            // programme that names no mode is taught on the regular timetable.
+            'study_mode_lookup_value_id' => [
+                'nullable',
+                'integer',
+                new LookupValueOfType(STUDY_MODE, 'invalid_study_mode'),
+            ],
             'degree_level_lookup_value_id' => [
                 'required',
                 'integer',
