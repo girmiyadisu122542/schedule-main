@@ -128,6 +128,69 @@ class DepartmentScopeService {
     }
 
     /**
+     * The colleges a user LEADS as dean.
+     *
+     * Separate from {@see self::managedDepartmentIds()}, which deliberately
+     * folds a dean in with the heads of the departments beneath them. That is
+     * the right answer for "may they act for this department", but the wrong one
+     * for the offering chain's COLLEGE tier: a department head must not be able
+     * to take the college decision on their own department's work, which is
+     * exactly what a folded-together scope would allow.
+     *
+     * @param \App\Models\User|null $user
+     *
+     * @return array<int, int>|null NULL means unrestricted; an EMPTY array means
+     *                              the user leads no college.
+     */
+    public function deanedCollegeIds(?User $user = null): ?array {
+        $user ??= Auth::user();
+
+        if (!$user) {
+            return [];
+        }
+
+        $cacheKey = 'deaned:' . $user->id;
+        if (array_key_exists($cacheKey, $this->cache)) {
+            return $this->cache[$cacheKey];
+        }
+
+        if ($user->isSuperAdmin() || $this->userCan(PERMISSION_SEE_ALL_DEPARTMENTS, $user)) {
+            return $this->cache[$cacheKey] = null;
+        }
+
+        $ids = College::query()
+            ->where('dean_user_id', $user->id)
+            ->pluck('id')
+            ->all();
+
+        return $this->cache[$cacheKey] = array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /**
+     * Whether this user leads the college a department sits in.
+     *
+     * @param int|null $departmentId
+     * @param \App\Models\User|null $user
+     *
+     * @return bool
+     */
+    public function leadsCollegeOf(?int $departmentId, ?User $user = null): bool {
+        $scope = $this->deanedCollegeIds($user);
+
+        if ($scope === null) {
+            return true;
+        }
+
+        if ($departmentId === null || !$scope) {
+            return false;
+        }
+
+        $collegeId = Department::query()->whereKey($departmentId)->value('college_id');
+
+        return $collegeId !== null && in_array((int) $collegeId, $scope, true);
+    }
+
+    /**
      * Whether a specific department is inside the user's scope.
      *
      * @param int|null $departmentId

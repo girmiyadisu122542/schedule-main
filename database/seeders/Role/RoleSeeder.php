@@ -40,6 +40,14 @@ class RoleSeeder extends Seeder {
             // org chart; this role only carries the extra permissions, which
             // otherwise had to be granted to every teacher in the institution.
             ['name' => 'Department Head', 'is_system' => false],
+            // The college-approval tier. Which COLLEGE they lead comes from
+            // `colleges.dean_user_id`, on the same derived-scope principle as
+            // the head above.
+            ['name' => 'College Dean', 'is_system' => false],
+            // Authors offerings for their own department and submits them into
+            // the chain. The submit itself records the committee decision, so
+            // this role also carries the committee tier's approval key.
+            ['name' => 'Committee Leader', 'is_system' => false],
             ['name' => 'Teacher', 'is_system' => false],
         ];
 

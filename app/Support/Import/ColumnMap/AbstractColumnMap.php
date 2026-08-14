@@ -90,6 +90,67 @@ abstract class AbstractColumnMap {
     }
 
     /**
+     * Natural-key parts the schema allows to be null.
+     *
+     * A null there is not a MISSING key, it IS the key — `(semester, course, ∅)`
+     * is precisely the identity a partial unique `WHERE section_id IS NULL`
+     * enforces. Without this the signature aborts, the row looks new, and the
+     * insert trips a raw constraint violation instead of a per-row message.
+     *
+     * @return array<int, string>
+     */
+    public function nullableKeyParts(): array {
+        return [];
+    }
+
+    /**
+     * Attributes stamped on CREATE only, that no sheet column may supply.
+     *
+     * @return array<string, mixed>
+     */
+    public function defaultAttributes(): array {
+        return [];
+    }
+
+    /**
+     * The column that records who created the row, or null to stamp nobody.
+     *
+     * Not every table spells it `user_id`: `course_offerings` uses
+     * `created_by_id`, and `instructors.user_id` is the person themselves.
+     *
+     * @return string|null
+     */
+    public function creatorAttribute(): ?string {
+        return $this->stampsCreator() ? 'user_id' : null;
+    }
+
+    /**
+     * Business rules that need the RESOLVED attributes and the record the row
+     * would update — scope checks, and "is this row still editable".
+     *
+     * @param array<string, mixed> $values the coerced row
+     * @param array<string, mixed> $attributes the resolved attributes
+     * @param \Illuminate\Database\Eloquent\Model|null $record the row being updated, if any
+     *
+     * @return array<int, array{column: string|null, key: string}>
+     */
+    public function validateResolvedRow(array $values, array $attributes, $record): array {
+        return [];
+    }
+
+    /**
+     * Runs inside pass 2's transaction, after the row is written — for child
+     * collections a column cannot express on its own.
+     *
+     * @param \Illuminate\Database\Eloquent\Model $record
+     * @param array<string, mixed> $values the coerced row
+     *
+     * @return void
+     */
+    public function afterWrite($record, array $values): void {
+    }
+
+    /**
      * The localized header row, in column order.
      *
      * @param string|null $locale defaults to the active application locale
@@ -138,7 +199,7 @@ abstract class AbstractColumnMap {
      * @return array<int, string>
      */
     public function requiredKeys(): array {
-        $required = array_filter($this->columns(), fn (Column $column) => $column->required);
+        $required = array_filter($this->columns(), fn (Column $column) => $column->required && !$column->exportOnly);
 
         return array_values(array_map(fn (Column $column) => $column->key, $required));
     }
@@ -152,6 +213,12 @@ abstract class AbstractColumnMap {
         $rules = [];
 
         foreach ($this->columns() as $column) {
+            // An export-only column is still a legal header, so a downloaded
+            // file re-imports — its cell is simply not validated or written.
+            if ($column->exportOnly) {
+                continue;
+            }
+
             $rules[$column->key] = array_merge(
                 [$column->required ? 'required' : 'nullable'],
                 $column->rules

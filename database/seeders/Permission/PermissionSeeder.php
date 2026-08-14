@@ -25,6 +25,20 @@ class PermissionSeeder extends Seeder {
      *
      * @return void
      */
+    /**
+     * Guarantee the super admin is among a permission's allowed roles.
+     *
+     * @param array<int, string> $roles
+     * @return array<int, string>
+     */
+    private static function withSuperAdmin(array $roles): array {
+        if (!in_array(SUPER_ADMIN_ROLE_NAME, $roles, true)) {
+            $roles[] = SUPER_ADMIN_ROLE_NAME;
+        }
+
+        return array_values($roles);
+    }
+
     public function run(): void {
         $user = User::first();
         if (!$user) {
@@ -36,6 +50,8 @@ class PermissionSeeder extends Seeder {
         $registrarRole = 'Registrar';
         $teacherRole = 'Teacher';
         $headRole = 'Department Head';
+        $deanRole = 'College Dean';
+        $committeeRole = 'Committee Leader';
 
         $permissionGroups = [
             PERMISSION_GROUP_SYSTEM_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_SYSTEM_MANAGEMENT)->first(),
@@ -215,8 +231,14 @@ class PermissionSeeder extends Seeder {
                 PERMISSION_UPDATE_COURSE_OFFERING,
                 PERMISSION_DELETE_COURSE_OFFERING,
                 PERMISSION_SUBMIT_COURSE_OFFERING,
-                PERMISSION_APPROVE_COURSE_OFFERING,
+                PERMISSION_APPROVE_COURSE_OFFERING_COMMITTEE,
+                PERMISSION_APPROVE_COURSE_OFFERING_DEPARTMENT,
+                PERMISSION_APPROVE_COURSE_OFFERING_COLLEGE,
+                PERMISSION_APPROVE_COURSE_OFFERING_REGISTRAR,
                 PERMISSION_REJECT_COURSE_OFFERING,
+                PERMISSION_REOPEN_COURSE_OFFERING,
+                PERMISSION_EXPORT_COURSE_OFFERING,
+                PERMISSION_IMPORT_COURSE_OFFERING,
             ],
             PERMISSION_GROUP_REPORT_MANAGEMENT => [
                 PERMISSION_SEE_REPORT,
@@ -418,14 +440,45 @@ class PermissionSeeder extends Seeder {
             ['name' => 'Delete Room', 'key' => PERMISSION_DELETE_ROOM, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Change Room State', 'key' => PERMISSION_CHANGE_ROOM_STATE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
-            // course offering workflow
-            ['name' => 'See Course Offering', 'key' => PERMISSION_SEE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
-            ['name' => 'Create Course Offering', 'key' => PERMISSION_CREATE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
-            ['name' => 'Update Course Offering', 'key' => PERMISSION_UPDATE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
-            ['name' => 'Delete Course Offering', 'key' => PERMISSION_DELETE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
-            ['name' => 'Submit Course Offering', 'key' => PERMISSION_SUBMIT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
-            ['name' => 'Approve Course Offering', 'key' => PERMISSION_APPROVE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole]],
-            ['name' => 'Reject Course Offering', 'key' => PERMISSION_REJECT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            // Course offering workflow.
+            //
+            // Authoring belongs to the Committee Leader, not to every Teacher:
+            // the chain starts with "the committee decides who teaches what",
+            // and a Teacher who could enter offerings would be entering them
+            // for the committee. Teachers keep read access to what they teach.
+            ['name' => 'See Course Offering', 'key' => PERMISSION_SEE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $deanRole, $headRole, $committeeRole, $teacherRole]],
+            ['name' => 'Create Course Offering', 'key' => PERMISSION_CREATE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $committeeRole]],
+            ['name' => 'Update Course Offering', 'key' => PERMISSION_UPDATE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $committeeRole]],
+            ['name' => 'Delete Course Offering', 'key' => PERMISSION_DELETE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $committeeRole]],
+            ['name' => 'Submit Course Offering', 'key' => PERMISSION_SUBMIT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $committeeRole]],
+
+            // One key per tier. Submitting records the committee decision, so
+            // the Committee Leader holds the committee tier. The Dean also
+            // holds the department tier, so a vacant headship cannot stall the
+            // chain — `DepartmentScopeService` already treats a dean as
+            // managing every department in their college.
+            ['name' => 'Approve Course Offering (Committee)', 'key' => PERMISSION_APPROVE_COURSE_OFFERING_COMMITTEE, 'allowed_roles' => [$superAdminRole, $committeeRole]],
+            ['name' => 'Approve Course Offering (Department)', 'key' => PERMISSION_APPROVE_COURSE_OFFERING_DEPARTMENT, 'allowed_roles' => [$superAdminRole, $headRole, $deanRole]],
+            ['name' => 'Approve Course Offering (College)', 'key' => PERMISSION_APPROVE_COURSE_OFFERING_COLLEGE, 'allowed_roles' => [$superAdminRole, $deanRole]],
+            ['name' => 'Approve Course Offering (Registrar)', 'key' => PERMISSION_APPROVE_COURSE_OFFERING_REGISTRAR, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            // Returning and rejecting are the same key: a reviewer who may
+            // advance work may also send it back. Withholding it, as the
+            // original seed did for the Department Head, left a tier that could
+            // only ever say yes.
+            ['name' => 'Reject Course Offering', 'key' => PERMISSION_REJECT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $deanRole, $headRole]],
+
+            // Undoing a rejection. Registrar-only: it reverses a decision, so
+            // it does not belong to the tier that took it.
+            ['name' => 'Reopen Course Offering', 'key' => PERMISSION_REOPEN_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+
+            ['name' => 'Export Course Offering', 'key' => PERMISSION_EXPORT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $deanRole, $headRole, $committeeRole]],
+            ['name' => 'Import Course Offering', 'key' => PERMISSION_IMPORT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $committeeRole]],
+
+            // The cross-department view. Defined since the scope service was
+            // written but never assigned, which silently confined the Registrar
+            // to nothing on every screen that enforces scope.
+            ['name' => 'See All Departments', 'key' => PERMISSION_SEE_ALL_DEPARTMENTS, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
             // report management
             ['name' => 'See Report', 'key' => PERMISSION_SEE_REPORT, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
@@ -464,7 +517,17 @@ class PermissionSeeder extends Seeder {
                         'unique_per_user' => $info['unique_per_user'] ?? false,
                         'is_system' => true,
                         'state' => STATE_ACTIVE,
-                        'allowed_roles' => $info['allowed_roles'] ?? [],
+                        // The super admin holds EVERY permission, always.
+                        //
+                        // Forced here rather than trusted to each entry, because
+                        // `userCan()` has no super-admin bypass — it resolves
+                        // purely from `role_permissions`. A permission added
+                        // later whose `allowed_roles` forgets the super admin
+                        // would therefore lock the super admin out of it, and
+                        // nothing would report that: the feature would simply
+                        // 403 for the one account meant to be able to do
+                        // anything.
+                        'allowed_roles' => self::withSuperAdmin($info['allowed_roles'] ?? []),
                     ]
                 );
             }

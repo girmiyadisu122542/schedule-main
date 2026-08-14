@@ -257,6 +257,11 @@ return getAllModuleTranslations(
         'sessions_per_week' => 'Sessions / week',
         'employee_no' => 'Employee number',
         'full_name' => 'Full name',
+        'semester' => 'Semester',
+        'course_code' => 'Course code',
+        'instructor_employee_no' => 'Instructor employee number',
+        'additional_sections' => 'Cross-listed sections',
+        'section' => 'Section',
         // Spreadsheet import/export headers — these ARE the column headers a
         // registrar sees, so they must read as labels, not as column names.
         'college_code' => 'College code',

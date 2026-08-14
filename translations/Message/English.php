@@ -923,6 +923,23 @@ class English extends Lang {
             'yes' => 'Yes',
             'no' => 'No',
 
+
+            /**
+             * Course-offering approval chain — the tier-derivation rework.
+             */
+            'offering_is_not_awaiting_a_decision' => 'This offering is not waiting on a decision right now.',
+            'not_your_tier_to_decide' => 'This offering is not yours to decide at its current stage.',
+            'you_already_acted_on_this_offering' => 'You took the previous decision on this offering — someone else has to take the next one.',
+            'only_a_rejected_offering_can_be_reopened' => 'Only a rejected offering can be reopened.',
+            'course_offering_reopened_successfully' => '{{name}} has been reopened as a draft.',
+
+            'course_offering_already_exists_for_this_cohort' => 'This course is already offered to that cohort in this semester.',
+
+            'import_department_outside_your_scope' => 'That department is outside the departments you may file offerings for.',
+            'import_offering_outside_your_scope' => 'That offering belongs to a department outside your scope.',
+            'import_offering_is_locked' => 'This offering is already in the approval chain and cannot be changed by import.',
+            'import_additional_section_not_found' => 'One of the cross-listed sections does not exist. Use PROGRAM|YEAR|LABEL, e.g. BSC-CS|2|B.',
+
         ];
     }
 }

@@ -130,6 +130,10 @@ class MasterDataImportService {
                 ]);
             }
 
+            foreach ($map->validateResolvedRow($values, $attributes, $record) as $resolvedError) {
+                $rowErrors[] = $this->error($rowNumber, $resolvedError['column'], $resolvedError['key']);
+            }
+
             if ($rowErrors) {
                 $errors = array_merge($errors, $rowErrors);
                 continue;
@@ -142,6 +146,7 @@ class MasterDataImportService {
             $planned[] = [
                 'attributes' => $attributes,
                 'record' => $record,
+                'values' => $values,
                 'rowNumber' => $rowNumber,
             ];
 
@@ -180,16 +185,24 @@ class MasterDataImportService {
                     $attributes = $this->mergeTranslatables($attributes, $record, $map);
                     $record->fill($attributes);
                     $record->save();
+                    $map->afterWrite($record, $planned['values'] ?? []);
                     $updated++;
                     continue;
                 }
 
                 $attributes['uuid'] = (string) Str::uuid();
-                if ($map->stampsCreator()) {
-                    $attributes['user_id'] = Auth::id();
+
+                // Stamped on CREATE only, and never from a sheet column — this
+                // is where an imported row's status is pinned to `draft`.
+                $attributes = array_merge($attributes, $map->defaultAttributes());
+
+                $creatorAttribute = $map->creatorAttribute();
+                if ($creatorAttribute) {
+                    $attributes[$creatorAttribute] = Auth::id();
                 }
 
-                $modelClass::create($attributes);
+                $fresh = $modelClass::create($attributes);
+                $map->afterWrite($fresh, $planned['values'] ?? []);
                 $created++;
             }
 
@@ -374,7 +387,7 @@ class MasterDataImportService {
         $resolved = [];
 
         foreach ($map->columns() as $column) {
-            if (!$column->relation && !$column->lookupType) {
+            if (!$column->relation && !$column->lookupType && !$column->resolver) {
                 continue;
             }
 
@@ -384,6 +397,11 @@ class MasterDataImportService {
                 if ($value !== null && $value !== '') {
                     $values[mb_strtolower((string) $value)] = (string) $value;
                 }
+            }
+
+            if ($column->resolver) {
+                $resolved[$column->key] = ($column->resolver)($values);
+                continue;
             }
 
             $resolved[$column->key] = $column->lookupType
@@ -460,9 +478,13 @@ class MasterDataImportService {
         $language = getCurrentLanguage(request());
 
         foreach ($map->columns() as $column) {
+            if ($column->exportOnly) {
+                continue;
+            }
+
             $value = $values[$column->key] ?? null;
 
-            if ($column->relation || $column->lookupType) {
+            if ($column->relation || $column->lookupType || $column->resolver) {
                 if ($value === null) {
                     $attributes[$column->attribute] = null;
                     continue;
@@ -507,7 +529,7 @@ class MasterDataImportService {
      */
     private function dropUnsetOptionals(array $attributes, AbstractColumnMap $map): array {
         foreach ($map->columns() as $column) {
-            $isNullableReference = $column->relation !== null || $column->lookupType !== null;
+            $isNullableReference = $column->relation !== null || $column->lookupType !== null || $column->resolver !== null;
 
             if ($column->required || $isNullableReference) {
                 continue;
@@ -586,7 +608,15 @@ class MasterDataImportService {
                 : ($values[$key] ?? null);
 
             if ($value === null || $value === '') {
-                return null;
+                // A key part the schema allows to be null is not a missing key
+                // — it IS the key, matching the partial unique that covers the
+                // null case.
+                if (!in_array($key, $map->nullableKeyParts(), true)) {
+                    return null;
+                }
+
+                $parts[] = ImportConstant::NULL_KEY_TOKEN;
+                continue;
             }
 
             $parts[] = mb_strtolower((string) $value);
@@ -634,7 +664,7 @@ class MasterDataImportService {
                     continue;
                 }
 
-                if ($column->relation || $column->lookupType) {
+                if ($column->relation || $column->lookupType || $column->resolver) {
                     $id = $references[$column->key][mb_strtolower((string) $value)] ?? null;
                     if ($id !== null) {
                         $candidates[] = $id;
@@ -645,11 +675,24 @@ class MasterDataImportService {
                 $candidates[] = $value;
             }
 
+            $isNullable = in_array($key, $map->nullableKeyParts(), true);
+
             if (!$candidates) {
-                return [];
+                // For a nullable part a file of blanks is a legitimate query —
+                // every row is looking for the section-less record.
+                if (!$isNullable) {
+                    return [];
+                }
+
+                $query->whereNull($column->attribute);
+                continue;
             }
 
-            $query->whereIn($column->attribute, array_values(array_unique($candidates)));
+            $unique = array_values(array_unique($candidates));
+
+            $isNullable
+                ? $query->where(fn ($query) => $query->whereIn($column->attribute, $unique)->orWhereNull($column->attribute))
+                : $query->whereIn($column->attribute, $unique);
         }
 
         $existing = [];
@@ -658,7 +701,11 @@ class MasterDataImportService {
             $parts = [];
             foreach ($naturalKey as $key) {
                 $column = $map->column($key);
-                $parts[] = mb_strtolower((string) $record->{$column->attribute});
+                $value = $record->{$column->attribute};
+
+                $parts[] = ($value === null || $value === '')
+                    ? ImportConstant::NULL_KEY_TOKEN
+                    : mb_strtolower((string) $value);
             }
 
             $existing[implode('|', $parts)] = $record;

@@ -263,6 +263,11 @@ return getAllModuleTranslations(
         'sessions_per_week' => 'ክፍለ ጊዜ / ሳምንት',
         'employee_no' => 'የሠራተኛ ቁጥር',
         'full_name' => 'ሙሉ ስም',
+        'semester' => 'ሴሚስተር',
+        'course_code' => 'የኮርስ ኮድ',
+        'instructor_employee_no' => 'የመምህር የሠራተኛ ቁጥር',
+        'additional_sections' => 'ተጨማሪ ክፍሎች',
+        'section' => 'ክፍል',
         // Spreadsheet import/export headers — these ARE the column headers a
         // registrar sees, so they must read as labels, not as column names.
         'college_code' => 'የኮሌጅ ኮድ',
