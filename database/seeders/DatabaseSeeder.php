@@ -11,7 +11,6 @@ use Database\Seeders\Academic\SectionSeeder;
 use Database\Seeders\Academic\SemesterSeeder;
 use Database\Seeders\Catalogue\CourseSeeder;
 use Database\Seeders\Invigilation\ExamInvigilatorAssignmentSeeder;
-use Database\Seeders\Invigilation\InvigilatorAvailabilitySeeder;
 use Database\Seeders\Lookup\LookupSeeder;
 use Database\Seeders\Offering\CourseOfferingSeeder;
 use Database\Seeders\People\InstructorSeeder;
@@ -24,6 +23,7 @@ use Database\Seeders\Role\RolePermissionSeeder;
 use Database\Seeders\Role\RoleSeeder;
 use Database\Seeders\Role\UserRoleBindingSeeder;
 use Database\Seeders\Schedule\ClassScheduleSeeder;
+use Database\Seeders\Schedule\ScheduleSettingSeeder;
 use Database\Seeders\Schedule\ExamScheduleSeeder;
 use Database\Seeders\User\UserSeeder;
 use Helper\Cache\RoleCacheHandler;
@@ -61,10 +61,9 @@ class DatabaseSeeder extends Seeder {
                 CourseSeeder::class,
                 InstructorSeeder::class,
                 CourseOfferingSeeder::class,
+                ScheduleSettingSeeder::class,
                 ClassScheduleSeeder::class,
                 ExamScheduleSeeder::class,
-                // Availability must exist before duties can draw on it.
-                InvigilatorAvailabilitySeeder::class,
                 ExamInvigilatorAssignmentSeeder::class,
             ]);
         } catch (\Throwable $exception) {

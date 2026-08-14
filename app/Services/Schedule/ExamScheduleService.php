@@ -354,6 +354,14 @@ class ExamScheduleService {
             'end_time' => $data['end_time'],
             'room_id' => $data['room_id'] ?? null,
             'required_invigilators' => (int) ($data['required_invigilators'] ?? 1),
+            // Accommodations (C21). Kept nullable throughout: most sittings
+            // need none, and an empty string stored as "no note" would make
+            // "has an accommodation" impossible to query for.
+            'accommodation_note' => $data['accommodation_note'] ?? null,
+            'accommodation_extra_minutes' => isset($data['accommodation_extra_minutes'])
+                ? (int) $data['accommodation_extra_minutes']
+                : null,
+            'accommodation_room_id' => $data['accommodation_room_id'] ?? null,
         ];
     }
 }

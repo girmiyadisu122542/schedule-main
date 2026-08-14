@@ -32,7 +32,7 @@ class ClassScheduleGeneratorService {
      * @param int $semesterId
      * @return \App\Models\Schedule\ScheduleGenerationRun|string
      */
-    public function generate(int $semesterId) {
+    public function generate(int $semesterId, bool $dryRun = false) {
         // ---- pre-flight checks (NO writes yet) ----
         $semester = Semester::with('status')->find($semesterId);
         if (!$semester) {
@@ -71,17 +71,22 @@ class ClassScheduleGeneratorService {
             $rooms = $this->availableRooms();
 
             foreach ($offerings as $offering) {
-                // Re-running a generation must not double-book a semester that
-                // is already partly scheduled.
-                if ($this->alreadyScheduled($offering->id)) {
+                // A meeting that has been announced is not the generator's to
+                // move — re-running must leave published work alone.
+                if ($this->hasCommittedSchedule($offering->id, $draftStatusId)) {
                     $summary['skipped'][] = [
                         'course_offering_id' => $offering->id,
                         'label' => $offering->displayLabel(),
-                        'reason' => 'already_scheduled',
+                        'reason' => 'already_published',
                     ];
 
                     continue;
                 }
+
+                // Drafts ARE the generator's to replace. Clearing them is what
+                // makes re-running actually regenerate: without it a semester
+                // that was generated once could never pick up a changed grid.
+                $this->clearDrafts($offering->id, $draftStatusId);
 
                 $placement = $this->placeOffering($offering, $rooms, $run, $draftStatusId);
                 $scheduledCount += $placement['placed'];
@@ -90,7 +95,7 @@ class ClassScheduleGeneratorService {
                     $summary['placed'][] = [
                         'course_offering_id' => $offering->id,
                         'label' => $offering->displayLabel(),
-                        'meetings' => $placement['placed'],
+                        'sessions' => $placement['placed'],
                     ];
 
                     continue;
@@ -110,10 +115,34 @@ class ClassScheduleGeneratorService {
         } catch (\Throwable $exception) {
             $this->finishRun($run, $failedId, $scheduledCount, $unplacedCount, $summary, $startedAt);
 
+            // A rehearsal that fell over still has to leave nothing behind.
+            if ($dryRun) {
+                ClassSchedule::where('generation_run_id', $run->id)->delete();
+            }
+
             throw $exception;
         }
 
         $this->finishRun($run, $completedId, $scheduledCount, $unplacedCount, $summary, $startedAt);
+
+        // A rehearsal: the placements really happened, against the real
+        // constraints, so the answer is honest — then the rows are removed and
+        // the timetable is exactly as it was (C42).
+        //
+        // The rows do exist for the duration of the run, which is the price of
+        // giving a true answer: the only way to know a slot is free is to try
+        // to take it. Nothing else may be generating at the same time anyway.
+        if ($dryRun) {
+            ClassSchedule::where('generation_run_id', $run->id)->delete();
+            $run->forceFill(['is_dry_run' => true])->save();
+
+            return $run->refresh();
+        }
+
+        // Keep what this run laid down, so it can be put back if the next one
+        // turns out worse (C41). After finishRun, so a failed run leaves no
+        // snapshot to restore from.
+        app(ScheduleSnapshotService::class)->captureClassRun($run);
 
         return $run->refresh();
     }
@@ -132,7 +161,9 @@ class ClassScheduleGeneratorService {
         }
 
         return CourseOffering::query()
-            ->with(['course', 'section.program', 'instructor'])
+            // `program` and `section.program` carry the study mode the
+            // generation grid is chosen by.
+            ->with(['course', 'program', 'section.program', 'instructor'])
             ->where('semester_id', $semesterId)
             ->where('status_lookup_value_id', $approvedId)
             ->orderByDesc('expected_students')
@@ -154,16 +185,42 @@ class ClassScheduleGeneratorService {
     }
 
     /**
-     * Whether this offering already has live meetings on the timetable.
+     * Whether this offering has meetings the generator must not touch —
+     * anything live that is past draft.
      *
      * @param int $offeringId
      * @return bool
      */
-    private function alreadyScheduled(int $offeringId): bool {
+    private function hasCommittedSchedule(int $offeringId, int $draftStatusId): bool {
         return ClassSchedule::query()
             ->where('course_offering_id', $offeringId)
             ->where('state', STATE_ACTIVE)
+            ->whereNot('status_lookup_value_id', $draftStatusId)
             ->exists();
+    }
+
+    /**
+     * Discard this offering's draft meetings so they can be re-placed.
+     *
+     * Only drafts, and only live ones: a cancelled meeting is already out of
+     * the way, and a published one was filtered out before we got here.
+     *
+     * @param int $offeringId
+     * @param int $draftStatusId CLASS_SCHEDULE_STATUS value id
+     *
+     * @return void
+     */
+    private function clearDrafts(int $offeringId, int $draftStatusId): void {
+        ClassSchedule::query()
+            ->where('course_offering_id', $offeringId)
+            ->where('state', STATE_ACTIVE)
+            ->where('status_lookup_value_id', $draftStatusId)
+            // A pinned draft is one a coordinator placed by hand and wants
+            // kept. It survives regeneration and, being still live, the
+            // EXCLUDE constraints keep treating its room, instructor and
+            // cohort slot as taken — so the run schedules around it (C15).
+            ->where('is_pinned', false)
+            ->delete();
     }
 
     /**
@@ -321,60 +378,169 @@ class ClassScheduleGeneratorService {
 
         $lastConflict = 'no_free_slot_found';
 
-        // Days this offering does not meet on yet come first; the rest are a
-        // fallback for a course with more sessions than there are teaching days.
-        $days = array_merge(
-            array_values(array_diff(ScheduleConstant::TEACHING_DAYS, $usedDays)),
-            array_values(array_intersect(ScheduleConstant::TEACHING_DAYS, $usedDays)),
-        );
+        // The grid comes from the offering's study mode, so an extension
+        // programme is placed at the weekend and a regular one on weekdays.
+        $settings = app(ScheduleSettingService::class);
+        $setting = $settings->forOffering($offering);
+        $teachingDays = $settings->teachingDays($setting);
+        $periods = $settings->periods($setting);
+        $weights = $settings->weights($setting);
+        $allowCrossCampus = $settings->allowsCrossCampusDay($setting);
 
-        foreach ($days as $day) {
-            foreach (ScheduleConstant::GENERATION_TIME_SLOTS as $slot) {
+        $scorer = app(PlacementScorer::class);
+        $workload = app(InstructorWorkloadService::class);
+        $semesterId = (int) $offering->semester_id;
+        $sectionId = $offering->section_id ? (int) $offering->section_id : null;
+
+        // Cross-listed cohorts attend the same room at the same hour. The
+        // section EXCLUDE only protects the owner, so the others are checked
+        // here — otherwise a shared lecture silently double-books them.
+        $attendingSectionIds = $this->attendingSectionIds($offering);
+
+        // Every legal-looking candidate, scored, best first. Building the whole
+        // list before writing is what separates this from first-fit: the first
+        // free slot is rarely the best one, and the difference is a week a
+        // cohort can actually work.
+        $candidates = [];
+        foreach ($teachingDays as $day) {
+            $sectionDay = $scorer->sectionDay($sectionId, $semesterId, $day);
+
+            foreach ($periods as $slot) {
+                $slotMinutes = (int) round((strtotime($slot['end']) - strtotime($slot['start'])) / 60);
+
+                // The instructor's weekly ceiling. Checked per slot because a
+                // period's length varies with the configured grid.
+                if (!$workload->canTake($offering->instructor_id, $semesterId, $slotMinutes)) {
+                    $lastConflict = 'instructor_over_weekly_limit';
+
+                    continue;
+                }
+
+                if ($this->sectionsBusy($attendingSectionIds, $semesterId, $day, $slot)) {
+                    $lastConflict = 'cross_listed_section_busy';
+
+                    continue;
+                }
+
                 foreach ($candidateRooms as $room) {
-                    $attributes = [
-                        'course_offering_id' => $offering->id,
-                        'semester_id' => $offering->semester_id,
-                        'section_id' => $offering->section_id,
-                        'instructor_id' => $offering->instructor_id,
-                        'room_id' => $room->id,
-                        'session_type_lookup_value_id' => $sessionTypeId,
-                        'day_of_week' => $day,
-                        'start_time' => $slot['start'],
-                        'end_time' => $slot['end'],
-                        'status_lookup_value_id' => $draftStatusId,
-                        'state' => STATE_ACTIVE,
-                        'generation_run_id' => $run->id,
-                        'created_by_id' => Auth::id(),
-                    ];
-
-                    try {
-                        DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
-
-                        ClassSchedule::create($attributes);
-
-                        DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
-                    } catch (QueryException $exception) {
-                        DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
-
-                        $conflict = ClassScheduleService::conflictKey($exception);
-                        if (!$conflict) {
-                            throw $exception;
-                        }
-
-                        // A section or instructor clash rules out this whole
-                        // slot, whatever room we try next — but say so only if
-                        // nothing better turns up.
-                        $lastConflict = $conflict;
+                    // A cohort cannot cross campus between periods, so this is
+                    // a rejection rather than a penalty.
+                    if (!$allowCrossCampus && $scorer->crossesCampus($room, $sectionDay)) {
+                        $lastConflict = 'cohort_would_cross_campus';
 
                         continue;
                     }
 
-                    return ['day' => $day, 'reason' => null];
+                    $candidates[] = [
+                        'day' => $day,
+                        'slot' => $slot,
+                        'room' => $room,
+                        'score' => $scorer->score($weights, $day, $slot, $room, (int) $offering->expected_students, $usedDays, $sectionDay),
+                    ];
                 }
             }
         }
 
+        // Descending score. `usort` is not stable across PHP versions in a way
+        // worth relying on, so ties fall back to the grid's own order.
+        usort($candidates, fn (array $a, array $b): int => $b['score'] <=> $a['score']);
+
+        foreach ($candidates as $candidate) {
+            $day = $candidate['day'];
+            $slot = $candidate['slot'];
+            $room = $candidate['room'];
+
+            $attributes = [
+                'course_offering_id' => $offering->id,
+                'semester_id' => $offering->semester_id,
+                'section_id' => $offering->section_id,
+                'instructor_id' => $offering->instructor_id,
+                'room_id' => $room->id,
+                'session_type_lookup_value_id' => $sessionTypeId,
+                'day_of_week' => $day,
+                'start_time' => $slot['start'],
+                'end_time' => $slot['end'],
+                'status_lookup_value_id' => $draftStatusId,
+                'state' => STATE_ACTIVE,
+                'generation_run_id' => $run->id,
+                'created_by_id' => Auth::id(),
+            ];
+
+            try {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+                ClassSchedule::create($attributes);
+
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+            } catch (QueryException $exception) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                $conflict = ClassScheduleService::conflictKey($exception);
+                if (!$conflict) {
+                    throw $exception;
+                }
+
+                // A section or instructor clash rules out this whole slot,
+                // whatever room comes next — but say so only if nothing
+                // better turns up.
+                $lastConflict = $conflict;
+
+                continue;
+            }
+
+            // The write invalidates both cached pictures: the cohort's day and
+            // the instructor's committed week.
+            $scorer->forget($sectionId, $semesterId, $day);
+            $workload->forget($offering->instructor_id, $semesterId);
+
+            return ['day' => $day, 'reason' => null];
+        }
+
         return ['day' => null, 'reason' => $lastConflict];
+    }
+
+    /**
+     * Every cohort that attends this offering besides the owning section.
+     *
+     * A cross-listed offering is taught once, in one room, to several sections.
+     * The owner is protected by `cs_no_section_clash`; these are not, so they
+     * have to be checked before a slot is accepted.
+     *
+     * @param \App\Models\Offering\CourseOffering $offering
+     * @return array<int, int>
+     */
+    private function attendingSectionIds(CourseOffering $offering): array {
+        return $offering->additionalSections
+            ->pluck('section_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * Whether any of these cohorts is already busy in this window.
+     *
+     * @param array<int, int> $sectionIds
+     * @param int $semesterId
+     * @param int $day
+     * @param array<string, string> $slot
+     *
+     * @return bool
+     */
+    private function sectionsBusy(array $sectionIds, int $semesterId, int $day, array $slot): bool {
+        if (empty($sectionIds)) {
+            return false;
+        }
+
+        return ClassSchedule::query()
+            ->whereIn('section_id', $sectionIds)
+            ->where('semester_id', $semesterId)
+            ->where('day_of_week', $day)
+            ->where('state', STATE_ACTIVE)
+            // Overlap, not equality: a 60-minute slot collides with a
+            // 90-minute one that merely starts inside it.
+            ->where('start_time', '<', $slot['end'])
+            ->where('end_time', '>', $slot['start'])
+            ->exists();
     }
 
     /**

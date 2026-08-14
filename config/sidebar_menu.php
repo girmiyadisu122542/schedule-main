@@ -22,6 +22,9 @@ return SideBar::create([
                 SideBarItem::instructors('UserIcon', FrontendPaths::INSTRUCTORS),
                 SideBarItem::sections('BusinessChart', FrontendPaths::SECTIONS),
                 SideBarItem::courses('BookIcon', FrontendPaths::COURSES),
+                // The generation grid: teaching days, day window, period
+                // length and lunch — one per study mode.
+                SideBarItem::scheduleSettings('ClockTimeTimerArrow', FrontendPaths::SCHEDULE_SETTINGS),
             ]),
             SideBarItem::courseOfferings('FileText', FrontendPaths::OFFERINGS),
             SideBarItem::scheduling('ClockTimeTimerArrow', null, [
@@ -31,11 +34,14 @@ return SideBar::create([
                 SideBarItem::examCalendar('date', FrontendPaths::EXAM_CALENDAR),
             ]),
             SideBarItem::invigilation('ShieldCheckAltIcon', null, [
-                SideBarItem::invigilatorAvailabilities('UserCheckIcon', FrontendPaths::INVIGILATOR_AVAILABILITIES),
+                SideBarItem::invigilationRequests('SendPlaneIcon', FrontendPaths::INVIGILATION_REQUESTS),
                 SideBarItem::invigilatorAssignments('ShieldCheckAltIcon', FrontendPaths::INVIGILATOR_ASSIGNMENTS),
             ]),
             SideBarItem::reports('FileText', FrontendPaths::REPORTS),
-            SideBarItem::notifications('BellIcon', FrontendPaths::NOTIFICATIONS),
+            // Notifications is not built yet (audit C28). A menu item that
+            // leads to a placeholder teaches users the software is unfinished
+            // and they generalise that to the parts that do work — so it stays
+            // out of the sidebar until there is something behind it.
             SideBarItem::dynamicValues('InvoiceIcon', FrontendPaths::MANAGE_DYNAMIC_VALUES),
 
             SideBarItem::userAndAccess('Users', null, [

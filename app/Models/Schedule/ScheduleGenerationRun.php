@@ -24,6 +24,8 @@ class ScheduleGenerationRun extends ScopedModel {
      */
     protected $casts = [
         'summary' => 'array',
+        'snapshot' => 'array',
+        'is_dry_run' => 'boolean',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
@@ -42,6 +44,8 @@ class ScheduleGenerationRun extends ScopedModel {
         'unplaced_count',
         'duration_seconds',
         'summary',
+        'snapshot',
+        'is_dry_run',
         'run_by_id',
         'started_at',
         'completed_at',
@@ -137,6 +141,11 @@ class ScheduleGenerationRun extends ScopedModel {
             Field::makeResource('run_by', 'runBy', fields: 'idAndNameFields'),
             // The per-offering detail the progress UI lists; already an array.
             Field::summary(fn ($data) => $data->summary ?? []),
+            // Whether there is anything to restore. The snapshot itself is a
+            // whole timetable and has no business in a list payload — only
+            // the fact that it exists does.
+            Field::isDryRun()->asBool(),
+            Field::make('has_snapshot', fn ($data) => !empty($data->snapshot['rows'] ?? [])),
             Field::startedAt(fn ($data) => $data->started_at?->format(DATETIME_FORMAT)),
             Field::completedAt(fn ($data) => $data->completed_at?->format(DATETIME_FORMAT)),
             Field::createdAt(fn ($data) => $data->created_at->format(DATE_FORMAT)),

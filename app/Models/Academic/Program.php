@@ -34,6 +34,7 @@ class Program extends ScopedModel {
         'name',
         'department_id',
         'degree_level_lookup_value_id',
+        'study_mode_lookup_value_id',
         'duration_years',
         'is_active',
         'user_id',
@@ -56,6 +57,16 @@ class Program extends ScopedModel {
      */
     public function degreeLevel(): BelongsTo {
         return $this->belongsTo(LookupValue::class, 'degree_level_lookup_value_id');
+    }
+
+    /**
+     * Relationship LookupValue — the STUDY_MODE this program is delivered in.
+     * It decides which days and hours the generator may place it in.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function studyMode(): BelongsTo {
+        return $this->belongsTo(LookupValue::class, 'study_mode_lookup_value_id');
     }
 
     /**
@@ -89,11 +100,14 @@ class Program extends ScopedModel {
             Field::name('name__localized'),
             Field::departmentId()->asInt(),
             Field::degreeLevelLookupValueId()->asInt(),
+            Field::studyModeLookupValueId()->asInt(),
             Field::durationYears()->asInt(),
             Field::isActive()->asBool(),
             // The status chip reads `degree_level_code` + the lookup's own color.
             Field::degreeLevelCode('degreeLevel.code'),
+            Field::studyModeCode('studyMode.code'),
             Field::makeResource('degree_level', 'degreeLevel', fields: 'idAndNameFields'),
+            Field::makeResource('study_mode', 'studyMode', fields: 'idAndNameFields'),
             Field::makeResource('department', fields: 'idAndNameFields'),
             Field::makeResource('created_by', 'user', fields: 'idAndNameFields'),
             Field::createdAt(fn ($data) => $data->created_at->format(DATE_FORMAT)),

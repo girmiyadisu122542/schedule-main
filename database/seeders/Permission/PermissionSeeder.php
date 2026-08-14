@@ -35,6 +35,7 @@ class PermissionSeeder extends Seeder {
         $superAdminRole = SUPER_ADMIN_ROLE_NAME;
         $registrarRole = 'Registrar';
         $teacherRole = 'Teacher';
+        $headRole = 'Department Head';
 
         $permissionGroups = [
             PERMISSION_GROUP_SYSTEM_MANAGEMENT => PermissionGroup::where('code', PERMISSION_GROUP_SYSTEM_MANAGEMENT)->first(),
@@ -115,16 +116,22 @@ class PermissionSeeder extends Seeder {
                 PERMISSION_RUN_CLASS_SCHEDULE_GENERATION,
                 PERMISSION_RUN_EXAM_SCHEDULE_GENERATION,
                 PERMISSION_SEE_SCHEDULE_GENERATION_RUN,
+                PERMISSION_SEE_SCHEDULE_SETTING,
+                PERMISSION_CREATE_SCHEDULE_SETTING,
+                PERMISSION_UPDATE_SCHEDULE_SETTING,
                 PERMISSION_SEE_EXAM_SCHEDULE,
                 PERMISSION_CREATE_EXAM_SCHEDULE,
                 PERMISSION_UPDATE_EXAM_SCHEDULE,
                 PERMISSION_DELETE_EXAM_SCHEDULE,
                 PERMISSION_CONFIRM_EXAM_SCHEDULE,
+                PERMISSION_CONFIRM_CLASS_SCHEDULE,
                 PERMISSION_PUBLISH_EXAM_SCHEDULE,
                 PERMISSION_CANCEL_EXAM_SCHEDULE,
-                PERMISSION_SEE_INVIGILATOR_AVAILABILITY,
-                PERMISSION_SUBMIT_INVIGILATOR_AVAILABILITY,
-                PERMISSION_DELETE_INVIGILATOR_AVAILABILITY,
+                PERMISSION_SEE_INVIGILATION_REQUEST,
+                PERMISSION_CREATE_INVIGILATION_REQUEST,
+                PERMISSION_UPDATE_INVIGILATION_REQUEST,
+                PERMISSION_SEND_INVIGILATION_REQUEST,
+                PERMISSION_RESPOND_TO_INVIGILATION_REQUEST,
                 PERMISSION_SEE_INVIGILATOR_ASSIGNMENT,
                 PERMISSION_ASSIGN_INVIGILATOR,
                 PERMISSION_RESPOND_TO_INVIGILATOR_ASSIGNMENT,
@@ -222,7 +229,7 @@ class PermissionSeeder extends Seeder {
         ];
 
         $permissions = [
-            ['name' => 'See Dashboard', 'key' => PERMISSION_SEE_DASHBOARD, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'See Dashboard', 'key' => PERMISSION_SEE_DASHBOARD, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
 
             // user management
             ['name' => 'See User', 'key' => PERMISSION_SEE_USER, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
@@ -277,30 +284,39 @@ class PermissionSeeder extends Seeder {
             ['name' => 'Entity Add Dynamic Value', 'key' => PERMISSION_ENTITY_ADD_DYNAMIC_VALUE, 'allowed_roles' => [$superAdminRole]],
 
             // class schedule management
-            ['name' => 'See Class Schedule', 'key' => PERMISSION_SEE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'See Class Schedule', 'key' => PERMISSION_SEE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
             ['name' => 'Create Class Schedule', 'key' => PERMISSION_CREATE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Update Class Schedule', 'key' => PERMISSION_UPDATE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Delete Class Schedule', 'key' => PERMISSION_DELETE_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Publish Class Schedule', 'key' => PERMISSION_PUBLISH_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Cancel Class Schedule', 'key' => PERMISSION_CANCEL_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Run Class Schedule Generation', 'key' => PERMISSION_RUN_CLASS_SCHEDULE_GENERATION, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            // Configuration, not day-to-day scheduling: the registrar owns
+            // the grid, a department head only reads it.
+            ['name' => 'See Schedule Setting', 'key' => PERMISSION_SEE_SCHEDULE_SETTING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Create Schedule Setting', 'key' => PERMISSION_CREATE_SCHEDULE_SETTING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Schedule Setting', 'key' => PERMISSION_UPDATE_SCHEDULE_SETTING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Run Exam Schedule Generation', 'key' => PERMISSION_RUN_EXAM_SCHEDULE_GENERATION, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'See Schedule Generation Run', 'key' => PERMISSION_SEE_SCHEDULE_GENERATION_RUN, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
             // exam schedule management
-            ['name' => 'See Exam Schedule', 'key' => PERMISSION_SEE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'See Exam Schedule', 'key' => PERMISSION_SEE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
             ['name' => 'Create Exam Schedule', 'key' => PERMISSION_CREATE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Update Exam Schedule', 'key' => PERMISSION_UPDATE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Delete Exam Schedule', 'key' => PERMISSION_DELETE_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
-            ['name' => 'Confirm Exam Schedule', 'key' => PERMISSION_CONFIRM_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Confirm Exam Schedule', 'key' => PERMISSION_CONFIRM_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole]],
+            ['name' => 'Confirm Class Schedule', 'key' => PERMISSION_CONFIRM_CLASS_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole]],
             ['name' => 'Publish Exam Schedule', 'key' => PERMISSION_PUBLISH_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Cancel Exam Schedule', 'key' => PERMISSION_CANCEL_EXAM_SCHEDULE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
             // invigilation — the department offers windows, the registrar reads them
-            ['name' => 'See Invigilator Availability', 'key' => PERMISSION_SEE_INVIGILATOR_AVAILABILITY, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
-            ['name' => 'Submit Invigilator Availability', 'key' => PERMISSION_SUBMIT_INVIGILATOR_AVAILABILITY, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
-            ['name' => 'Delete Invigilator Availability', 'key' => PERMISSION_DELETE_INVIGILATOR_AVAILABILITY, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'See Invigilator Assignment', 'key' => PERMISSION_SEE_INVIGILATOR_ASSIGNMENT, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            // The registrar raises and issues the ask; the department answers it.
+            ['name' => 'See Invigilation Request', 'key' => PERMISSION_SEE_INVIGILATION_REQUEST, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
+            ['name' => 'Create Invigilation Request', 'key' => PERMISSION_CREATE_INVIGILATION_REQUEST, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Update Invigilation Request', 'key' => PERMISSION_UPDATE_INVIGILATION_REQUEST, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Send Invigilation Request', 'key' => PERMISSION_SEND_INVIGILATION_REQUEST, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Respond To Invigilation Request', 'key' => PERMISSION_RESPOND_TO_INVIGILATION_REQUEST, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole]],
             ['name' => 'Assign Invigilator', 'key' => PERMISSION_ASSIGN_INVIGILATOR, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             // The instructor answers for themselves, so a teacher holds this one.
             ['name' => 'Respond To Invigilator Assignment', 'key' => PERMISSION_RESPOND_TO_INVIGILATOR_ASSIGNMENT, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
@@ -403,16 +419,16 @@ class PermissionSeeder extends Seeder {
             ['name' => 'Change Room State', 'key' => PERMISSION_CHANGE_ROOM_STATE, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
             // course offering workflow
-            ['name' => 'See Course Offering', 'key' => PERMISSION_SEE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'See Course Offering', 'key' => PERMISSION_SEE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
             ['name' => 'Create Course Offering', 'key' => PERMISSION_CREATE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
             ['name' => 'Update Course Offering', 'key' => PERMISSION_UPDATE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
             ['name' => 'Delete Course Offering', 'key' => PERMISSION_DELETE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
             ['name' => 'Submit Course Offering', 'key' => PERMISSION_SUBMIT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
-            ['name' => 'Approve Course Offering', 'key' => PERMISSION_APPROVE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
+            ['name' => 'Approve Course Offering', 'key' => PERMISSION_APPROVE_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole]],
             ['name' => 'Reject Course Offering', 'key' => PERMISSION_REJECT_COURSE_OFFERING, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
             // report management
-            ['name' => 'See Report', 'key' => PERMISSION_SEE_REPORT, 'allowed_roles' => [$superAdminRole, $registrarRole, $teacherRole]],
+            ['name' => 'See Report', 'key' => PERMISSION_SEE_REPORT, 'allowed_roles' => [$superAdminRole, $registrarRole, $headRole, $teacherRole]],
             ['name' => 'Export Report', 'key' => PERMISSION_EXPORT_REPORT, 'allowed_roles' => [$superAdminRole, $registrarRole]],
 
             // notification management

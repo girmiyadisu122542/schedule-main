@@ -35,6 +35,7 @@ class ExamScheduleGeneratorController extends Controller {
             $result = app(ExamScheduleGeneratorService::class)->generate(
                 (int) $request->validated('semester_id'),
                 $examTypeCode,
+                (bool) $request->boolean('dry_run'),
             );
         } catch (\Exception $exception) {
             return Response::_500(Message::get('unable_to_generate_exam_schedules'));
@@ -46,7 +47,9 @@ class ExamScheduleGeneratorController extends Controller {
 
         return Response::_201([
             'data' => $result->fresh(['semester', 'type', 'status', 'runBy'])->resource(),
-            'message' => Message::get('exam_schedule_generation_completed', [
+            'message' => Message::get($request->boolean('dry_run')
+                ? 'exam_schedule_dry_run_completed'
+                : 'exam_schedule_generation_completed', [
                 'scheduled' => $result->scheduled_count,
                 'unplaced' => $result->unplaced_count,
             ]),

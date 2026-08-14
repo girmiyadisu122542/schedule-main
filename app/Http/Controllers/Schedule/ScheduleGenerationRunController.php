@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Schedule;
 
 use App\Http\Controllers\Controller;
 use App\Models\Schedule\ScheduleGenerationRun;
+use App\Services\Schedule\ScheduleSnapshotService;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -67,6 +68,53 @@ class ScheduleGenerationRunController extends Controller {
 
         return Response::_200([
             'data' => $run->resource(),
+        ]);
+    }
+
+    /**
+     * Put back the timetable this run produced (C41).
+     *
+     * The snapshot is replayed through ordinary inserts, so every EXCLUDE still
+     * applies. Rows that no longer fit — because something else has since taken
+     * the slot — are reported rather than forced, and the response says how
+     * many of each so the user knows whether the undo was complete.
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function restore($id): JsonResponse {
+        $run = ScheduleGenerationRun::with('type')->find($id);
+        if (!$run) {
+            return Response::_404(Message::get('generation_run_not_found'));
+        }
+
+        // Restoring WRITES a timetable, so it takes the same permission as
+        // producing one — and specifically the one for this run's own kind,
+        // since exam scheduling and class scheduling are granted separately.
+        $allowed = $run->type?->code === GENERATION_TYPE_EXAM
+            ? $this->userCanRunExamScheduleGeneration()
+            : $this->userCanRunClassScheduleGeneration();
+
+        if (!$allowed) {
+            return Response::_403();
+        }
+
+        try {
+            $result = app(ScheduleSnapshotService::class)->restore($run);
+        } catch (\Exception $exception) {
+            return Response::_500(Message::get('unable_to_restore_generation_run'));
+        }
+
+        if (is_string($result)) {
+            return Response::_422(Message::get($result));
+        }
+
+        return Response::_200([
+            'data' => $result,
+            'message' => Message::get('generation_run_restored_successfully', [
+                'restored' => $result['restored'],
+                'rejected' => $result['rejected'],
+            ]),
         ]);
     }
 }

@@ -34,6 +34,9 @@ class GenerateClassScheduleRequest extends FormRequest {
     public function rules(): array {
         return [
             'semester_id' => ['required', 'integer', 'exists:' . Semester::getTableName() . ',id'],
+            // A rehearsal: report what would be placed, then leave
+            // the timetable exactly as it was (C42).
+            'dry_run' => ['nullable', 'boolean'],
         ];
     }
 

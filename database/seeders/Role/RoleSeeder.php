@@ -34,6 +34,12 @@ class RoleSeeder extends Seeder {
         $roles = [
             ['name' => SUPER_ADMIN_ROLE_NAME, 'is_system' => true],
             ['name' => 'Registrar', 'is_system' => false],
+            // A head is also a teacher — the two roles are held together, not
+            // instead of one another. Which DEPARTMENT they head still comes
+            // from `departments.head_user_id`, so scope stays derived from the
+            // org chart; this role only carries the extra permissions, which
+            // otherwise had to be granted to every teacher in the institution.
+            ['name' => 'Department Head', 'is_system' => false],
             ['name' => 'Teacher', 'is_system' => false],
         ];
 

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Academic\Department;
+use App\Services\User\DepartmentScopeService;
 use Common\Lang\Lang;
 use Helper\Permission\PermissionActionHelper;
 use Helper\Response\Response;
@@ -39,6 +41,10 @@ class AllowedRoutesController extends Controller {
                 'trial' => null,
                 'modules' => [],
                 'features' => [],
+                // Which departments this user owns. The scheduling screens read
+                // it to pin their filters and to drop pickers that would only
+                // ever offer one answer — the server enforces the same bound.
+                'scope' => $this->departmentScope($user),
             ];
 
             if (empty($allPermissions)) {
@@ -99,6 +105,54 @@ class AllowedRoutesController extends Controller {
         } catch (\Exception $exception) {
             return Response::_500(Message::get('internal_server_error') . ' ' . $exception->getMessage());
         }
+    }
+
+    /**
+     * The departments this user is confined to, named for the UI.
+     *
+     * `unrestricted` is the important bit and is NOT the same as an empty list:
+     * unrestricted means the whole institution, empty means nothing at all.
+     *
+     * @param \App\Models\User|null $user
+     *
+     * @return array{unrestricted: bool, departments: array}
+     */
+    private function departmentScope($user): array {
+        $service = app(DepartmentScopeService::class);
+        $ids = $service->departmentIds($user);
+        $managedIds = $service->managedDepartmentIds($user);
+
+        if ($ids === null) {
+            return ['unrestricted' => true, 'departments' => [], 'managed_departments' => []];
+        }
+
+        return [
+            'unrestricted' => false,
+            // What the user may READ — includes the department they teach in.
+            'departments' => $this->namedDepartments($ids),
+            // What they may ACT FOR — heading it, or leading its college. The
+            // invigilation screens key off this: answering a registrar on a
+            // department's behalf is the head's job, not every teacher's.
+            'managed_departments' => $this->namedDepartments($managedIds ?? []),
+        ];
+    }
+
+    /**
+     * Departments by id, in the compact shape the frontend renders.
+     *
+     * @param array<int, int> $ids
+     * @return array
+     */
+    private function namedDepartments(array $ids): array {
+        if (empty($ids)) {
+            return [];
+        }
+
+        return Department::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->map(fn (Department $department) => $department->resource('idAndNameFields'))
+            ->all();
     }
 
     /**

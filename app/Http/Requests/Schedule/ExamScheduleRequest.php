@@ -45,6 +45,14 @@ class ExamScheduleRequest extends FormRequest {
             'start_time' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT],
             'end_time' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT, 'after:start_time'],
             'required_invigilators' => ['nullable', 'integer', 'between:1,' . MAX_EXAM_INVIGILATORS],
+            // ---- accommodations (C21) ----
+            // Without a student entity this is what can honestly be offered:
+            // the registrar records what is needed and reserves a second room
+            // for it. The note is deliberately free text — the arrangements
+            // vary too much to enumerate, and a wrong enum is worse than prose.
+            'accommodation_note' => ['nullable', 'string', 'max:1000'],
+            'accommodation_extra_minutes' => ['nullable', 'integer', 'between:1,240'],
+            'accommodation_room_id' => ['nullable', 'integer', 'exists:' . Room::getTableName() . ',id'],
         ];
     }
 

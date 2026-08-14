@@ -98,6 +98,7 @@ class ProgramService {
             'name' => updateLangField($program?->name, $language, $data['name']),
             'department_id' => (int) $data['department_id'],
             'degree_level_lookup_value_id' => (int) $data['degree_level_lookup_value_id'],
+            'study_mode_lookup_value_id' => $data['study_mode_lookup_value_id'] ?? null,
             'duration_years' => (int) $data['duration_years'],
             'is_active' => (bool) ($data['is_active'] ?? true),
         ];

@@ -37,6 +37,10 @@ return new class extends Migration {
             $table->decimal('tutorial_hours_per_week', 4, 2)->nullable();
             $table->smallInteger('sessions_per_week')->nullable();
 
+            // How long this course's exam runs. Null means "use the study
+            // mode's default" — most courses sit the standard length, and a
+            // three-hour default should not have to be typed on every row.
+            $table->smallInteger('exam_duration_minutes')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             $table->softDeletes();

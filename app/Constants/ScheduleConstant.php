@@ -77,4 +77,25 @@ class ScheduleConstant {
 
     /** How many invigilators a generated sitting asks for by default. */
     public const DEFAULT_REQUIRED_INVIGILATORS = 2;
+
+    /** Minutes in an hour — settings store hours, the engine works in minutes. */
+    public const MINUTES_PER_HOUR = 60;
+
+    /**
+     * Fallbacks for the rules `schedule_settings` configures, used only when
+     * nothing has been configured at all. Each one matches the column default,
+     * so an unseeded database behaves like a seeded one.
+     */
+    public const DEFAULT_MAX_EXAMS_PER_DAY = 2;
+
+    public const DEFAULT_STUDENTS_PER_INVIGILATOR = 50;
+
+    /** Soft-constraint weights. Zero switches a preference off entirely. */
+    public const DEFAULT_WEIGHT_SPREAD = 10;
+
+    public const DEFAULT_WEIGHT_GAPS = 6;
+
+    public const DEFAULT_WEIGHT_ROOM_FIT = 3;
+
+    public const DEFAULT_WEIGHT_BUILDING = 4;
 }

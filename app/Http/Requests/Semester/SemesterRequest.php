@@ -49,6 +49,21 @@ class SemesterRequest extends FormRequest {
             'name' => ['nullable', 'string', 'max:' . MAX_NAME_LENGTH],
             'start_date' => ['required', DATE_FORMAT_VALIDATION_KEY],
             'end_date' => ['required', DATE_FORMAT_VALIDATION_KEY, 'after:start_date'],
+            // The exam period is mandatory: the generator has to be told when
+            // exams sit, and inferring it from the end of term produced dates
+            // no registrar had published.
+            'exam_start_date' => [
+                'required',
+                DATE_FORMAT_VALIDATION_KEY,
+                'after_or_equal:start_date',
+                'before_or_equal:end_date',
+            ],
+            'exam_end_date' => [
+                'required',
+                DATE_FORMAT_VALIDATION_KEY,
+                'after_or_equal:exam_start_date',
+                'before_or_equal:end_date',
+            ],
             'is_current' => ['nullable', 'boolean'],
         ];
     }

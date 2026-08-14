@@ -297,4 +297,108 @@ class ClassScheduleService {
             'end_time' => $data['end_time'],
         ];
     }
+
+    /**
+     * The department confirmation step (C26).
+     *
+     * Which move this is depends on where the session already is, not on
+     * anything the caller sends: from `draft` it ASKS the department, from
+     * `pending_confirmation` it IS the department's answer. Same shape as the
+     * exam lifecycle, deliberately — a department that has learnt one has
+     * learnt both.
+     *
+     * @param \App\Models\Schedule\ClassSchedule $schedule
+     * @param string|null $remark
+     *
+     * @return \App\Models\Schedule\ClassSchedule|string the model, or a translation key
+     */
+    public function confirm(ClassSchedule $schedule, ?string $remark = null) {
+        $currentCode = $schedule->status?->code;
+        if (!$currentCode) {
+            return 'status_lookup_value_not_found';
+        }
+
+        $targetCode = $currentCode === CLASS_SCHEDULE_STATUS_DRAFT
+            ? CLASS_SCHEDULE_STATUS_PENDING_CONFIRMATION
+            : CLASS_SCHEDULE_STATUS_CONFIRMED;
+
+        if (!LookupService::isTransitionAllowed(CLASS_SCHEDULE_STATUS, $currentCode, $targetCode)) {
+            return 'invalid_status_transition';
+        }
+
+        $targetId = LookupService::getValueByCode(CLASS_SCHEDULE_STATUS, $targetCode, needId: true);
+        if (!$targetId) {
+            return 'status_lookup_value_not_found';
+        }
+
+        $isConfirmation = $targetCode === CLASS_SCHEDULE_STATUS_CONFIRMED;
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            $schedule->status_lookup_value_id = $targetId;
+
+            // Only the department's own decision stamps the actor — asking for
+            // it is the registrar's move and records nobody.
+            if ($isConfirmation) {
+                $schedule->confirmed_by_id = Auth::id();
+                $schedule->confirmed_at = now();
+                $schedule->confirmation_remark = $remark;
+            }
+
+            $schedule->save();
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Throwable $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+            throw $exception;
+        }
+
+        return $schedule;
+    }
+
+    /**
+     * The department disagrees: send it back to draft for rework.
+     *
+     * Better than leaving it in `pending_confirmation` forever, which is what
+     * happens to a workflow with no way to say no.
+     *
+     * @param \App\Models\Schedule\ClassSchedule $schedule
+     * @param string|null $remark
+     *
+     * @return \App\Models\Schedule\ClassSchedule|string
+     */
+    public function returnToDraft(ClassSchedule $schedule, ?string $remark = null) {
+        $currentCode = $schedule->status?->code;
+        if (!$currentCode) {
+            return 'status_lookup_value_not_found';
+        }
+
+        if (!LookupService::isTransitionAllowed(CLASS_SCHEDULE_STATUS, $currentCode, CLASS_SCHEDULE_STATUS_DRAFT)) {
+            return 'invalid_status_transition';
+        }
+
+        $draftId = LookupService::getValueByCode(CLASS_SCHEDULE_STATUS, CLASS_SCHEDULE_STATUS_DRAFT, needId: true);
+        if (!$draftId) {
+            return 'status_lookup_value_not_found';
+        }
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            $schedule->status_lookup_value_id = $draftId;
+            // The remark is why it came back, which is the useful part.
+            $schedule->confirmation_remark = $remark;
+            $schedule->confirmed_by_id = null;
+            $schedule->confirmed_at = null;
+            $schedule->save();
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Throwable $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+            throw $exception;
+        }
+
+        return $schedule;
+    }
 }

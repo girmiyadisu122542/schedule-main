@@ -26,6 +26,9 @@ class ExamInvigilatorAssignmentController extends Controller {
     private const EAGER = [
         'examSchedule.courseOffering.course',
         'examSchedule.examType',
+        // The roster prints the hall, so the embed needs it loaded.
+        'examSchedule.room',
+        'instructor.department',
         'instructor',
         'role',
         'status',
@@ -191,6 +194,42 @@ class ExamInvigilatorAssignmentController extends Controller {
         return Response::_201([
             'data' => $result->fresh(self::EAGER)->resource(),
             'message' => Message::get('invigilator_replaced_successfully', ['name' => $result->displayLabel()]),
+        ]);
+    }
+
+    /**
+     * Take one invigilator off a sitting.
+     *
+     * Only a duty nobody has answered yet: once somebody has accepted or
+     * declined, their answer is a record and `replace` is the honest way to
+     * change who is on the hall.
+     *
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function destroy($id): JsonResponse {
+        if (!$this->userCanAssignInvigilator()) {
+            return Response::_403();
+        }
+
+        $assignment = ExamInvigilatorAssignment::with(['status', 'examSchedule'])->find($id);
+        if (!$assignment) {
+            return Response::_404(Message::get('invigilator_assignment_not_found'));
+        }
+
+        try {
+            $result = app(ExamInvigilatorAssignmentService::class)->remove($assignment);
+        } catch (\Exception $exception) {
+            return Response::_500(Message::get('unable_to_remove_invigilator'));
+        }
+
+        if (is_string($result)) {
+            return Response::_422(Message::get($result));
+        }
+
+        return Response::_200([
+            'data' => $result->resource(),
+            'message' => Message::get('invigilator_removed_successfully'),
         ]);
     }
 }

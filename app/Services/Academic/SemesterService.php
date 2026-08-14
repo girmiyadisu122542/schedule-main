@@ -151,6 +151,8 @@ class SemesterService {
             'name' => updateLangField($semester?->name, $language, $data['name'] ?? null, canBeNull: true),
             'start_date' => $data['start_date'],
             'end_date' => $data['end_date'],
+            'exam_start_date' => $data['exam_start_date'],
+            'exam_end_date' => $data['exam_end_date'],
             'is_current' => (bool) ($data['is_current'] ?? false),
         ];
     }

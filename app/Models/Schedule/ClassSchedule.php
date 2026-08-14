@@ -15,6 +15,7 @@ use Helper\Model\ScopedModel;
 use Helper\Type\DayOfWeek\DayOfWeek;
 use Helper\Type\State\State;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One recurring weekly class meeting — the output of class scheduling.
@@ -36,6 +37,9 @@ class ClassSchedule extends ScopedModel {
      * @var array<string, string>
      */
     protected $casts = [
+        'confirmed_at' => 'datetime',
+        'specific_date' => 'date',
+        'is_pinned' => 'boolean',
         'published_at' => 'datetime',
     ];
 
@@ -57,9 +61,14 @@ class ClassSchedule extends ScopedModel {
         'end_time',
         'status_lookup_value_id',
         'state',
+        'is_pinned',
+        'specific_date',
         'generation_run_id',
         'created_by_id',
         'published_by_id',
+        'confirmed_at',
+        'confirmation_remark',
+        'confirmed_by_id',
         'published_at',
     ];
 
@@ -198,6 +207,24 @@ class ClassSchedule extends ScopedModel {
     }
 
     /**
+     * Relationship ClassScheduleException — weeks cut out of this weekly rule.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function exceptions(): HasMany {
+        return $this->hasMany(ClassScheduleException::class);
+    }
+
+    /**
+     * Relationship User — the department actor who confirmed this session.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function confirmedBy(): BelongsTo {
+        return $this->belongsTo(User::class, 'confirmed_by_id');
+    }
+
+    /**
      * Fields returned by the list and detail endpoints.
      *
      * @return array
@@ -217,6 +244,13 @@ class ClassSchedule extends ScopedModel {
             Field::generationRunId()->asInt(),
             Field::dayOfWeek()->asInt(),
             Field::state()->asInt(),
+            Field::isPinned()->asBool(),
+            Field::confirmationRemark(),
+            Field::confirmedAt(fn ($data) => $data->confirmed_at?->format(DATETIME_FORMAT)),
+            Field::makeResource('confirmed_by', 'confirmedBy', fields: 'idAndNameFields'),
+            Field::specificDate(fn ($data) => $data->specific_date?->format(DATE_FORMAT)),
+            // The weeks cut out of this weekly rule, so a calendar can skip them.
+            Field::makeCollection('exceptions', fields: 'idAndNameFields'),
             Field::startTime(fn ($data) => $data->shortTime($data->start_time)),
             Field::endTime(fn ($data) => $data->shortTime($data->end_time)),
             Field::timeRange(fn ($data) => $data->timeRange()),
@@ -230,6 +264,11 @@ class ClassSchedule extends ScopedModel {
             Field::makeResource('course_offering', 'courseOffering', fields: 'idAndNameFields'),
             Field::makeResource('semester', fields: 'idAndNameFields'),
             Field::makeResource('section', fields: 'idAndNameFields'),
+            // Ownership, one hop through the offering (Final Schema.md §12).
+            // The master timetable groups its rows by these; the section's own
+            // label already NAMES the programme but carries no id to group on.
+            Field::makeResource('department', 'courseOffering.department', fields: 'idAndNameFields'),
+            Field::makeResource('program', 'courseOffering.program', fields: 'idAndNameFields'),
             Field::makeResource('instructor', fields: 'idAndNameFields'),
             Field::makeResource('room', fields: 'idAndNameFields'),
             Field::makeResource('created_by', 'createdBy', fields: 'idAndNameFields'),

@@ -92,7 +92,7 @@ define('USER_STATES', [USER_STATE_ACTIVE, USER_STATE_INACTIVE]);
 define('SUPER_ADMIN_ROLE_NAME', 'Super Admin');
 
 define('LOGIN_LOCK_TIMEOUT', 600); // Login Lock Timeout in Seconds
-define('MAXIMUM_LOGIN_ATTEMPT', 5); // Maximum Login Attempt
+define('MAXIMUM_LOGIN_ATTEMPT', 10); // Maximum Login Attempt
 
 define('API_GUARD', 'api'); // The passport api guard
 define('API_GUARD_MIDDLEWARE', 'auth:api');

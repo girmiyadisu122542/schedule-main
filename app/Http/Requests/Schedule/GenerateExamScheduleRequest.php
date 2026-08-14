@@ -35,6 +35,9 @@ class GenerateExamScheduleRequest extends FormRequest {
         return [
             'semester_id' => ['required', 'integer', 'exists:' . Semester::getTableName() . ',id'],
             'exam_type_lookup_value_id' => ['nullable', 'integer', new LookupValueOfType(EXAM_TYPE, 'invalid_exam_type')],
+            // A rehearsal: report what would be placed, then leave
+            // the timetable exactly as it was (C42).
+            'dry_run' => ['nullable', 'boolean'],
         ];
     }
 

@@ -53,6 +53,9 @@ class CourseRequest extends FormRequest {
             'lab_hours_per_week' => ['nullable', 'numeric', 'between:0,' . MAX_COURSE_HOURS],
             'tutorial_hours_per_week' => ['nullable', 'numeric', 'between:0,' . MAX_COURSE_HOURS],
             'sessions_per_week' => ['nullable', 'integer', 'between:1,' . MAX_SESSIONS_PER_WEEK],
+            // How long this course's exam runs. Null means the study
+            // mode's default — most courses sit the standard length.
+            'exam_duration_minutes' => ['nullable', 'integer', 'between:15,480'],
 
             'is_active' => ['nullable', 'boolean'],
         ];

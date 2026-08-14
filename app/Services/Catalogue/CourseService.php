@@ -119,6 +119,7 @@ class CourseService {
             'lab_hours_per_week' => $data['lab_hours_per_week'] ?? null,
             'tutorial_hours_per_week' => $data['tutorial_hours_per_week'] ?? null,
             'sessions_per_week' => isset($data['sessions_per_week']) ? (int) $data['sessions_per_week'] : null,
+            'exam_duration_minutes' => isset($data['exam_duration_minutes']) ? (int) $data['exam_duration_minutes'] : null,
             'is_active' => (bool) ($data['is_active'] ?? true),
         ];
     }

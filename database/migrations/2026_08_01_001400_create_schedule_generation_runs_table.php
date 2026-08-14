@@ -33,6 +33,15 @@ return new class extends Migration {
             // Per-run detail the progress UI reads: which offerings were placed,
             // and the error key for each one that was not.
             $table->jsonb('summary')->nullable();
+            // The rows this run laid down, as data (C41). `summary` says what
+            // happened; this is what it did, and is enough to put the previous
+            // timetable back when a regeneration turns out worse. Restoring
+            // replays it through the normal service, so every EXCLUDE still
+            // applies — a snapshot is not a licence to write illegal rows.
+            $table->jsonb('snapshot')->nullable();
+            // A rehearsal: the run reports what it would place, then rolls back
+            // (C42). Dry runs keep no snapshot and touch no timetable.
+            $table->boolean('is_dry_run')->default(false);
             $table->timestamp('started_at')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();

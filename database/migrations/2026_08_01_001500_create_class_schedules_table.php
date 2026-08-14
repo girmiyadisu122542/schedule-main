@@ -49,6 +49,23 @@ return new class extends Migration {
             // without deleting the row. Final Schema.md §14 design notes.
             $table->unsignedSmallInteger('state')->default(STATE_ACTIVE);
 
+            // A hand-placed row a coordinator does not want the next
+            // generation run to take away. `clearDrafts()` skips these and the
+            // generator treats them as occupied (C15).
+            $table->boolean('is_pinned')->default(false);
+
+            // Normally null: a class recurs weekly on `day_of_week`. Set for a
+            // one-off — a makeup class on one date — in which case day_of_week
+            // still holds that date's weekday so the EXCLUDE constraints and
+            // every week-grid query keep working unchanged (C18).
+            $table->date('specific_date')->nullable();
+
+            // The department confirmation step (C26). Mirrors exam_schedules:
+            // the department owns the teaching load, so it gets the same say
+            // over the class timetable that it already has over the exams.
+            $table->timestamp('confirmed_at')->nullable();
+            $table->text('confirmation_remark')->nullable();
+
             $table->timestamp('published_at')->nullable();
             $table->timestamps();
 
@@ -60,6 +77,7 @@ return new class extends Migration {
             $table->foreignId('generation_run_id')->nullable()->constrained(ScheduleGenerationRun::getTableName())->nullOnDelete();
 
             $table->foreignId('created_by_id')->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
+            $table->foreignId('confirmed_by_id')->nullable()->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('published_by_id')->nullable()->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
 
             $table->index('course_offering_id');
