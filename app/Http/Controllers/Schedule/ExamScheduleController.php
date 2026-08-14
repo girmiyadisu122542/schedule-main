@@ -346,4 +346,41 @@ class ExamScheduleController extends Controller {
             'message' => Message::get('exam_schedule_cancelled_successfully', ['name' => $result->displayLabel()]),
         ]);
     }
+    /**
+     * Pin or unpin a sitting (C15).
+     *
+     * A pinned row is one somebody placed by hand and does not want the next
+     * generation run to take away. It stays live, so the EXCLUDE constraints
+     * keep treating its slot as taken and the generator schedules around it
+     * rather than over it.
+     *
+     * Only a draft can be pinned: a published sitting is already protected,
+     * and pinning it would suggest a weaker guarantee than it has.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @param int $id
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function pin(Request $request, $id): JsonResponse {
+        $schedule = ExamSchedule::with(['status', 'courseOffering'])->find($id);
+        if (!$schedule) {
+            return Response::_404(Message::get('exam_schedule_not_found'));
+        }
+
+        if (!$this->scopeAllowsSchedule($schedule)) {
+            return Response::_403();
+        }
+
+        if (!$schedule->isDraft()) {
+            return Response::_422(Message::get('only_draft_schedules_can_be_pinned'));
+        }
+
+        $schedule->forceFill(['is_pinned' => (bool) $request->boolean('is_pinned', true)])->save();
+
+        return Response::_200([
+            'data' => $schedule->fresh(self::EAGER)->resource(),
+            'message' => Message::get($schedule->is_pinned ? 'exam_schedule_pinned_successfully' : 'exam_schedule_unpinned_successfully'),
+        ]);
+    }
 }

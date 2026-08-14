@@ -49,7 +49,6 @@ class ScheduleSettingSeeder extends Seeder {
                 // 14:00–17:00 exactly, so switching the generator over changes
                 // nothing until a registrar edits it.
                 'exam_gap_minutes' => 120,
-                'exam_period_days' => 14,
             ],
             // Saturday and Sunday, start to finish — the weekend intake.
             STUDY_MODE_EXTENSION => [
@@ -67,7 +66,6 @@ class ScheduleSettingSeeder extends Seeder {
                 'exam_day_end' => '17:30',
                 'exam_duration_minutes' => 180,
                 'exam_gap_minutes' => 60,
-                'exam_period_days' => 21,
             ],
             // Weekday late slots, after the working day.
             STUDY_MODE_EVENING => [
@@ -85,7 +83,6 @@ class ScheduleSettingSeeder extends Seeder {
                 'exam_day_end' => '20:30',
                 'exam_duration_minutes' => 180,
                 'exam_gap_minutes' => 0,
-                'exam_period_days' => 14,
             ],
             STUDY_MODE_SUMMER => [
                 'teaching_days' => [1, 2, 3, 4, 5, 6],
@@ -102,7 +99,6 @@ class ScheduleSettingSeeder extends Seeder {
                 'exam_day_end' => '16:00',
                 'exam_duration_minutes' => 120,
                 'exam_gap_minutes' => 60,
-                'exam_period_days' => 10,
             ],
         ];
 

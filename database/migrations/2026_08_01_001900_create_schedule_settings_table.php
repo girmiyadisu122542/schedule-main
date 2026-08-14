@@ -49,10 +49,44 @@ return new class extends Migration {
             $table->time('exam_day_end');
             // Used when a course declares no exam length of its own.
             $table->smallInteger('exam_duration_minutes');
+            // Per exam type, keyed by the lookup CODE: {"midterm": 90, "final": 180}.
+            // A midterm is almost never as long as a final, and the length is a
+            // property of the type as much as of the course. Resolution order
+            // is course -> type -> this default (ScheduleSettingService).
+            $table->jsonb('exam_type_durations')->nullable();
             // Turnaround between sittings in the same hall.
             $table->smallInteger('exam_gap_minutes')->default(0);
-            // How many days before the semester ends the exam period opens.
-            $table->smallInteger('exam_period_days');
+
+            // ---- what a cohort may be put through (C8) ----
+            // Overlapping exams are already impossible (es_no_section_clash).
+            // These two stop the legal-but-brutal case: three papers in one day,
+            // or a second paper starting as the first one ends.
+            $table->smallInteger('max_exams_per_day')->default(2);
+            $table->smallInteger('min_hours_between_exams')->default(0);
+
+            // ---- invigilator staffing (C11) ----
+            // A hall's duty count is derived from how many sit in it rather
+            // than typed, so the quantities asked of departments are defensible.
+            //
+            // 50 is deliberate: a hall of forty needs one person, and only a
+            // genuinely large sitting needs a second. Deriving it is the
+            // starting point, not the last word — a registrar adds or removes
+            // people on a specific sitting whenever the hall calls for it.
+            $table->smallInteger('students_per_invigilator')->default(50);
+            $table->smallInteger('min_invigilators_per_room')->default(1);
+
+            // ---- soft constraints (C10) ----
+            // Placement scores surviving candidates instead of taking the first
+            // free slot. Zero switches a preference off entirely, which is the
+            // documented way to opt out without code.
+            $table->smallInteger('weight_spread_sessions')->default(10);
+            $table->smallInteger('weight_avoid_gaps')->default(6);
+            $table->smallInteger('weight_room_fit')->default(3);
+            $table->smallInteger('weight_same_building')->default(4);
+            // A cohort sent between campuses between periods cannot arrive.
+            // Buildings are a preference; campuses are a hard rejection.
+            $table->boolean('allow_cross_campus_day')->default(false);
+
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
@@ -69,7 +103,15 @@ return new class extends Migration {
         DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_exam_window_check CHECK (exam_day_end > exam_day_start)');
         DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_exam_duration_check CHECK (exam_duration_minutes BETWEEN 15 AND 480)');
         DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_exam_gap_check CHECK (exam_gap_minutes BETWEEN 0 AND 240)');
-        DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_exam_period_days_check CHECK (exam_period_days BETWEEN 1 AND 90)');
+        DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_max_exams_per_day_check CHECK (max_exams_per_day BETWEEN 1 AND 8)');
+        DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_min_hours_between_exams_check CHECK (min_hours_between_exams BETWEEN 0 AND 72)');
+        DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_students_per_invigilator_check CHECK (students_per_invigilator BETWEEN 5 AND 200)');
+        DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_min_invigilators_check CHECK (min_invigilators_per_room BETWEEN 1 AND 20)');
+        // Weights are preferences, not scores to tune without bound — a weight
+        // an order of magnitude above the others silently becomes a hard rule.
+        DB::statement('ALTER TABLE schedule_settings ADD CONSTRAINT schedule_settings_weights_check CHECK ('
+            . 'weight_spread_sessions BETWEEN 0 AND 100 AND weight_avoid_gaps BETWEEN 0 AND 100'
+            . ' AND weight_room_fit BETWEEN 0 AND 100 AND weight_same_building BETWEEN 0 AND 100)');
 
         // Lunch is both-or-neither, and must be a real window when given.
         //

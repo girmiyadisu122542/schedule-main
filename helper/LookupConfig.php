@@ -112,6 +112,8 @@ define('SESSION_TYPE_PRACTICAL', 'practical');
 
 define('CLASS_SCHEDULE_STATUS', 'CLASS_SCHEDULE_STATUS');
 define('CLASS_SCHEDULE_STATUS_DRAFT', 'draft');
+define('CLASS_SCHEDULE_STATUS_PENDING_CONFIRMATION', 'pending_confirmation');
+define('CLASS_SCHEDULE_STATUS_CONFIRMED', 'confirmed');
 define('CLASS_SCHEDULE_STATUS_PUBLISHED', 'published');
 define('CLASS_SCHEDULE_STATUS_CANCELLED', 'cancelled');
 

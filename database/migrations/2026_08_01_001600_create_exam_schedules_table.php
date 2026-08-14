@@ -38,6 +38,25 @@ return new class extends Migration {
             // Sizes the invigilation step (steps 14/15).
             $table->smallInteger('required_invigilators')->default(1);
 
+            // ---- one paper sat across several halls (C9) ----
+            // A 300-strong cohort and no 300-seat hall is the normal case, not
+            // the exception. The sitting is then split: one row per hall, all
+            // at the same date and time, each seating `seat_allocation` of the
+            // cohort. `part_number of part_count` is what a student reads.
+            $table->integer('seat_allocation')->nullable();
+            $table->smallInteger('part_number')->default(1);
+            $table->smallInteger('part_count')->default(1);
+
+            // A hand-placed sitting the next run must not move (C15).
+            $table->boolean('is_pinned')->default(false);
+
+            // ---- accommodations (C21) ----
+            // Without a student entity this is what can honestly be offered:
+            // the registrar records what is needed and reserves a second room
+            // for it, and the duty roster prints both.
+            $table->text('accommodation_note')->nullable();
+            $table->smallInteger('accommodation_extra_minutes')->nullable();
+
             // The constraint-liveness flag — NOT `is_active`.
             $table->unsignedSmallInteger('state')->default(STATE_ACTIVE);
 
@@ -47,6 +66,9 @@ return new class extends Migration {
             $table->timestamps();
 
             $table->foreignId('room_id')->nullable()->constrained(Room::getTableName())->restrictOnUpdate()->restrictOnDelete();
+            // The separate room an accommodation is sat in. Not covered by the
+            // room EXCLUDE: it is a reservation, not a scheduled sitting.
+            $table->foreignId('accommodation_room_id')->nullable()->constrained(Room::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('exam_type_lookup_value_id')->constrained(LookupValue::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('status_lookup_value_id')->constrained(LookupValue::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('generation_run_id')->nullable()->constrained(ScheduleGenerationRun::getTableName())->nullOnDelete();
@@ -57,7 +79,11 @@ return new class extends Migration {
             $table->foreignId('published_by_id')->nullable()->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
 
             // One final, one midterm, … per offering.
-            $table->unique(['course_offering_id', 'exam_type_lookup_value_id']);
+            // One sitting per offering per exam type — except that a paper
+            // split across halls is several rows of one sitting, distinguished
+            // by `part_number`. Without part_number here the second hall is
+            // rejected as a duplicate exam (C9).
+            $table->unique(['course_offering_id', 'exam_type_lookup_value_id', 'part_number'], 'exam_schedules_offering_type_part_unique');
 
             $table->index('course_offering_id');
             $table->index(['semester_id', 'exam_date', 'start_time']);

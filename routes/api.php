@@ -17,7 +17,6 @@ use App\Http\Controllers\File\FileController;
 use App\Http\Controllers\Instructor\InstructorController;
 use App\Http\Controllers\Invigilation\ExamInvigilatorAssignmentController;
 use App\Http\Controllers\Invigilation\InvigilationRequestController;
-use App\Http\Controllers\Invigilation\InvigilatorAvailabilityController;
 use App\Http\Controllers\Lang\LanguageController;
 use App\Http\Controllers\Lookup\LookupTransitionController;
 use App\Http\Controllers\Lookup\LookupTypeController;
@@ -31,6 +30,7 @@ use App\Http\Controllers\Schedule\ClassScheduleController;
 use App\Http\Controllers\Schedule\ClassScheduleGeneratorController;
 use App\Http\Controllers\Schedule\ExamScheduleController;
 use App\Http\Controllers\Schedule\ExamScheduleGeneratorController;
+use App\Http\Controllers\Report\ScheduleReportController;
 use App\Http\Controllers\Schedule\ScheduleGenerationRunController;
 use App\Http\Controllers\Schedule\ScheduleSettingController;
 use App\Http\Controllers\Section\SectionController;
@@ -301,11 +301,27 @@ Route::middleware(API_GUARD_MIDDLEWARE)
             ->group(function () {
                 Route::post('/generate-class', [ClassScheduleGeneratorController::class, 'generate']);
 
+                // Where an unplaced offering would fit. Declared before the
+                // apiResource so "suggestions" is not swallowed by {id}.
+                Route::get('/class-schedules/suggestions', [ClassScheduleController::class, 'suggestions']);
+                // Bulk moves: shift a programme by a day, empty a room, cancel
+                // a holiday week. Declared before the apiResource so the path
+                // is not swallowed by {id}.
+                Route::post('/class-schedules/bulk', [ClassScheduleController::class, 'bulk']);
+
                 Route::apiResource('/class-schedules', ClassScheduleController::class)
                     ->parameters(['class-schedules' => 'id'])
                     ->where(['id' => '[A-Za-z0-9-]+']);
+                // The department confirmation step, mirroring exams (C26).
+                Route::post('/class-schedules/{id}/confirm', [ClassScheduleController::class, 'confirm']);
+                Route::post('/class-schedules/{id}/return-to-draft', [ClassScheduleController::class, 'returnToDraft']);
                 Route::post('/class-schedules/{id}/publish', [ClassScheduleController::class, 'publish']);
                 Route::post('/class-schedules/{id}/cancel', [ClassScheduleController::class, 'cancel']);
+                // Keep a hand-placed session through the next generation run.
+                Route::post('/class-schedules/{id}/pin', [ClassScheduleController::class, 'pin']);
+                // Cancel a single week without cancelling the weekly rule.
+                Route::post('/class-schedules/{id}/exceptions', [ClassScheduleController::class, 'addException']);
+                Route::delete('/class-schedules/{id}/exceptions/{exceptionId}', [ClassScheduleController::class, 'removeException']);
 
                 // Exam scheduling. Same shape as class scheduling, plus the
                 // optional department-confirmation step (Final Schema.md Sec. 15).
@@ -317,6 +333,7 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::post('/exam-schedules/{id}/confirm', [ExamScheduleController::class, 'confirm']);
                 Route::post('/exam-schedules/{id}/publish', [ExamScheduleController::class, 'publish']);
                 Route::post('/exam-schedules/{id}/cancel', [ExamScheduleController::class, 'cancel']);
+                Route::post('/exam-schedules/{id}/pin', [ExamScheduleController::class, 'pin']);
 
                 // The generation grid per study mode — what the registrar
                 // edits under Configuration instead of a redeploy. No delete:
@@ -331,6 +348,24 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                     ->only(['index', 'show'])
                     ->parameters(['generation-runs' => 'id'])
                     ->where(['id' => '[A-Za-z0-9-]+']);
+
+                // Put back the timetable a regeneration replaced. The snapshot
+                // is replayed through the normal service, so every EXCLUDE
+                // still applies — restoring cannot write an illegal row.
+                Route::post('/generation-runs/{id}/restore', [ScheduleGenerationRunController::class, 'restore']);
+            });
+
+        // Reporting. Read-only: three fixed reports and the exceptions list,
+        // each one an aggregate over tables that already exist.
+        Route::prefix('/reports')
+            ->group(function () {
+                Route::get('/room-utilisation', [ScheduleReportController::class, 'roomUtilisation']);
+                Route::get('/instructor-workload', [ScheduleReportController::class, 'instructorWorkload']);
+                Route::get('/exceptions', [ScheduleReportController::class, 'exceptions']);
+                Route::get('/compare', [ScheduleReportController::class, 'compare']);
+                // Is this term ready to schedule? The status page that replaces
+                // knowing the dependency order by heart (C37).
+                Route::get('/term-setup', [ScheduleReportController::class, 'termSetup']);
             });
 
         // Invigilation. An availability window is a positive statement, not a
@@ -352,9 +387,6 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::post('/request-departments/{id}/submit', [InvigilationRequestController::class, 'submit']);
                 Route::delete('/submissions/{id}', [InvigilationRequestController::class, 'withdraw']);
 
-                Route::get('/availabilities', [InvigilatorAvailabilityController::class, 'index']);
-                Route::post('/availabilities', [InvigilatorAvailabilityController::class, 'store']);
-                Route::delete('/availabilities/{id}', [InvigilatorAvailabilityController::class, 'destroy']);
 
                 // Duties. No /{id}/state route: `state` is the conflict-liveness
                 // flag and moves only with the status — declining or being
@@ -364,6 +396,8 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::post('/assignments', [ExamInvigilatorAssignmentController::class, 'store']);
                 Route::post('/assignments/{id}/respond', [ExamInvigilatorAssignmentController::class, 'respond']);
                 Route::post('/assignments/{id}/replace', [ExamInvigilatorAssignmentController::class, 'replace']);
+                // Take somebody off a hall. Only a duty nobody has answered.
+                Route::delete('/assignments/{id}', [ExamInvigilatorAssignmentController::class, 'destroy']);
             });
 
         // Lookup routes

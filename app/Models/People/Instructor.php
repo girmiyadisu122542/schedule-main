@@ -5,7 +5,6 @@ namespace App\Models\People;
 use App\Models\Academic\Department;
 use App\Models\Common\Lookup\LookupValue;
 use App\Models\Invigilation\ExamInvigilatorAssignment;
-use App\Models\Invigilation\InvigilatorAvailability;
 use App\Models\Offering\CourseOffering;
 use App\Models\Schedule\ClassSchedule;
 use App\Models\User;
@@ -101,14 +100,6 @@ class Instructor extends ScopedModel {
         return $this->hasMany(ClassSchedule::class);
     }
 
-    /**
-     * Relationship InvigilatorAvailability — windows the department offered for them.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
-     */
-    public function invigilatorAvailabilities(): HasMany {
-        return $this->hasMany(InvigilatorAvailability::class);
-    }
 
     /**
      * Relationship ExamInvigilatorAssignment — their invigilation duties.

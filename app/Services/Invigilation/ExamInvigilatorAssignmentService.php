@@ -4,7 +4,6 @@ namespace App\Services\Invigilation;
 
 use App\Models\Invigilation\ExamInvigilatorAssignment;
 use App\Models\Invigilation\InvigilationSubmission;
-use App\Models\Invigilation\InvigilatorAvailability;
 use App\Models\People\Instructor;
 use App\Models\Schedule\ExamSchedule;
 use App\Services\Lookup\LookupService;
@@ -92,7 +91,28 @@ class ExamInvigilatorAssignmentService {
             return 'invalid_invigilator_role';
         }
 
-        return $this->writeAssignment($exam, (int) $data['instructor_id'], $roleId, $assignedId, $data['remark'] ?? null);
+        // The first person on an empty hall is the chief, whatever the caller
+        // sent — a hall with two assistants and no chief is not a hall anybody
+        // is in charge of.
+        $onDuty = ExamInvigilatorAssignment::query()
+            ->where('exam_schedule_id', $exam->id)
+            ->where('state', STATE_ACTIVE)
+            ->count();
+
+        if ($onDuty === 0 && empty($data['role_lookup_value_id'])) {
+            $roleId = LookupService::getValueByCode(INVIGILATOR_ROLE, INVIGILATOR_ROLE_CHIEF, needId: true) ?: $roleId;
+        }
+
+        $result = $this->writeAssignment($exam, (int) $data['instructor_id'], $roleId, $assignedId, $data['remark'] ?? null);
+
+        // Putting somebody on a hall that is already fully staffed must not
+        // leave it reading as over-staffed — the requirement follows the
+        // decision, exactly as `remove()` lowers it.
+        if (!is_string($result)) {
+            $this->raiseRequirement($exam);
+        }
+
+        return $result;
     }
 
     /**
@@ -227,10 +247,10 @@ class ExamInvigilatorAssignmentService {
      * Fill every published-or-earlier sitting in a semester up to the number of
      * invigilators it asks for.
      *
-     * Instructors are drawn from the availability windows the department
-     * offered; `eia_no_double_booking` decides whether each candidate is
-     * actually free, exactly as the schedule generators use their EXCLUDE
-     * constraints.
+     * Instructors are drawn from whoever the departments SENT for this
+     * examination — the invigilation request workflow is the only source.
+     * `eia_no_double_booking` then decides whether each candidate is actually
+     * free, exactly as the schedule generators use their EXCLUDE constraints.
      *
      * @param int $semesterId
      * @return array{assigned: int, short: array<int, array<string, mixed>>}|string
@@ -271,8 +291,25 @@ class ExamInvigilatorAssignmentService {
                 continue;
             }
 
+            $candidates = $this->candidatesFor($exam);
+
+            if ($candidates->isEmpty()) {
+                $short[] = [
+                    'exam_schedule_id' => $exam->id,
+                    'label' => $exam->displayLabel(),
+                    'required' => $exam->required_invigilators,
+                    'on_duty' => $onDuty,
+                    // "Nobody was sent" and "everybody was busy" call for
+                    // completely different actions — raise a request, or hunt
+                    // for a free hall. Saying which is the whole value here.
+                    'reason' => 'no_invigilators_submitted',
+                ];
+
+                continue;
+            }
+
             $placed = 0;
-            foreach ($this->candidatesFor($exam) as $instructorId) {
+            foreach ($candidates as $instructorId) {
                 if ($placed >= $needed) {
                     break;
                 }
@@ -293,6 +330,9 @@ class ExamInvigilatorAssignmentService {
                     'label' => $exam->displayLabel(),
                     'required' => $exam->required_invigilators,
                     'on_duty' => $onDuty + $placed,
+                    // Everyone sent for this examination is already standing in
+                    // another hall at this hour.
+                    'reason' => 'all_submitted_invigilators_busy',
                 ];
             }
         }
@@ -371,13 +411,6 @@ class ExamInvigilatorAssignmentService {
     }
 
     /**
-     * Instructors the department declared available for this sitting's whole
-     * window, fewest current duties first so the load spreads.
-     *
-     * @param \App\Models\Schedule\ExamSchedule $exam
-     * @return \Illuminate\Support\Collection
-     */
-    /**
      * The instructors departments have submitted for this exam's scope.
      *
      * An exam belongs to a semester and an exam type; a request covers exactly
@@ -402,57 +435,41 @@ class ExamInvigilatorAssignmentService {
             ->values();
     }
 
+    /**
+     * Who may be put on this sitting, fewest current duties first.
+     *
+     * The pool is exactly the people departments SENT for this examination —
+     * nothing else. There used to be an availability model on top of this, with
+     * declared windows per instructor and a fallback when no request had been
+     * raised; it has been removed. Sending someone IS the declaration that they
+     * are available, so asking departments to state it twice was bookkeeping
+     * that earned nothing and could only disagree with itself.
+     *
+     * An empty result means nobody has been sent for this semester and exam
+     * type yet. That is reported as `no_invigilators_submitted` rather than
+     * quietly staffing the exam from whoever happens to exist.
+     *
+     * @param \App\Models\Schedule\ExamSchedule $exam
+     * @return \Illuminate\Support\Collection
+     */
     private function candidatesFor(ExamSchedule $exam): Collection {
-        // The pool is whoever the departments actually SENT for this
-        // examination scope — not every member of staff who happens to exist.
         $submitted = $this->submittedFor($exam);
 
-        // Nothing submitted for this scope means the request workflow has not
-        // been used here. Fall back to the availability windows so an
-        // institution that has not adopted requests yet still gets a staffed
-        // exam timetable rather than a silently empty one.
-        $pool = $submitted->isNotEmpty() ? $submitted : null;
-
-        $available = InvigilatorAvailability::query()
-            ->where('available_date', $exam->exam_date)
-            // Containment, not overlap: a window that only half covers the
-            // sitting is no use to it.
-            ->where('start_time', '<=', $exam->start_time)
-            ->where('end_time', '>=', $exam->end_time)
-            ->whereHas('instructor', fn ($query) => $query->where('can_invigilate', true)->where('is_active', true))
-            ->pluck('instructor_id')
-            ->unique()
-            ->values();
-
-        if ($pool !== null) {
-            // A submitted person with no availability window is available for
-            // the whole examination period — departments send PEOPLE, and only
-            // narrow them to windows when someone is genuinely part-time.
-            $windowed = InvigilatorAvailability::query()
-                ->whereIn('instructor_id', $pool)
-                ->where('semester_id', $exam->semester_id)
-                ->pluck('instructor_id')
-                ->unique();
-
-            $available = $pool
-                ->filter(fn (int $instructorId): bool => !$windowed->contains($instructorId)
-                    || $available->contains($instructorId))
-                ->values();
-        }
-
-        if ($available->isEmpty()) {
-            return $available;
+        if ($submitted->isEmpty()) {
+            return $submitted;
         }
 
         $dutyCounts = ExamInvigilatorAssignment::query()
-            ->whereIn('instructor_id', $available)
+            ->whereIn('instructor_id', $submitted)
             ->where('state', STATE_ACTIVE)
             ->selectRaw('instructor_id, count(*) as duty_count')
             ->groupBy('instructor_id')
             ->pluck('duty_count', 'instructor_id');
 
-        // The id tiebreak keeps a run reproducible.
-        return $available
+        // Fewest duties first so the load spreads; the id tiebreak keeps a run
+        // reproducible. Double-booking is refused by the EXCLUDE constraint, so
+        // this only has to choose well, not choose safely.
+        return $submitted
             ->sortBy(fn (int $instructorId): array => [(int) ($dutyCounts[$instructorId] ?? 0), $instructorId])
             ->values();
     }
@@ -471,19 +488,12 @@ class ExamInvigilatorAssignmentService {
             return 'instructor_cannot_invigilate';
         }
 
-        // The department must have offered a window that CONTAINS the whole
-        // sitting. Overlap is not enough — an invigilator has to be there for
-        // all of it.
-        $isAvailable = InvigilatorAvailability::query()
-            ->where('instructor_id', $instructorId)
-            ->where('available_date', $exam->exam_date)
-            ->where('start_time', '<=', $exam->start_time)
-            ->where('end_time', '>=', $exam->end_time)
-            ->exists();
-
-        if (!$isAvailable) {
-            return 'invigilator_not_available';
-        }
+        // No availability check: a department that sent someone has already
+        // said they can invigilate this examination, and the double-booking
+        // EXCLUDE constraint still stops the same person being in two halls at
+        // once. Manual assignment is deliberately NOT restricted to the
+        // submitted pool — a registrar filling a hall an hour before an exam
+        // needs to be able to put a name in without a request round-trip.
 
         return null;
     }
@@ -511,5 +521,76 @@ class ExamInvigilatorAssignmentService {
         }
 
         return null;
+    }
+
+    /**
+     * Take one invigilator off a sitting.
+     *
+     * The derived count is a starting point, not a verdict: a registrar who
+     * knows a hall needs one fewer person removes one here, and `required_
+     * invigilators` moves with it so the sitting does not immediately show as
+     * short of the number it no longer needs.
+     *
+     * Only a duty nobody has answered yet may be removed outright. Once it has
+     * been accepted or declined there is a record of what a person said, and
+     * `replace` is the honest way to change it — deleting would erase their
+     * answer.
+     *
+     * @param \App\Models\Invigilation\ExamInvigilatorAssignment $assignment
+     *
+     * @return \App\Models\Schedule\ExamSchedule|string the sitting, or a translation key
+     */
+    public function remove(ExamInvigilatorAssignment $assignment) {
+        if ($assignment->status?->code !== INVIGILATION_STATUS_ASSIGNED) {
+            return 'only_unanswered_duties_can_be_removed';
+        }
+
+        $exam = $assignment->examSchedule;
+        if (!$exam) {
+            return 'exam_schedule_not_found';
+        }
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            $assignment->delete();
+
+            // Keep the requirement in step with reality. Never below one: a
+            // sitting with nobody watching it is not a sitting.
+            $exam->required_invigilators = max(1, (int) $exam->required_invigilators - 1);
+            $exam->save();
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Throwable $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+            throw $exception;
+        }
+
+        return $exam->fresh();
+    }
+
+    /**
+     * Raise the number of invigilators a sitting needs by one.
+     *
+     * The counterpart to `remove`: assigning somebody to a hall that is already
+     * fully staffed should not leave it reading as over-staffed, so the
+     * requirement follows the decision.
+     *
+     * @param \App\Models\Schedule\ExamSchedule $exam
+     *
+     * @return \App\Models\Schedule\ExamSchedule
+     */
+    public function raiseRequirement(ExamSchedule $exam): ExamSchedule {
+        $onDuty = ExamInvigilatorAssignment::query()
+            ->where('exam_schedule_id', $exam->id)
+            ->where('state', STATE_ACTIVE)
+            ->count();
+
+        if ($onDuty > (int) $exam->required_invigilators) {
+            $exam->required_invigilators = $onDuty;
+            $exam->save();
+        }
+
+        return $exam->fresh();
     }
 }

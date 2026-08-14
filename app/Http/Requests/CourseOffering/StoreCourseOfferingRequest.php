@@ -42,6 +42,12 @@ class StoreCourseOfferingRequest extends FormRequest {
             'instructor_id' => ['nullable', 'integer', Instructor::exists()],
             'expected_students' => ['nullable', 'integer', 'between:0,' . MAX_SECTION_EXPECTED_STUDENTS],
             'remark' => ['nullable', 'string', 'max:' . MAX_DESCRIPTION_LENGTH],
+            // ---- cross-listing (C43) ----
+            // The other cohorts that attend. The OWNING section stays on
+            // `section_id` and is never repeated here, so "whose offering is
+            // this" keeps one answer and department scoping is untouched.
+            'additional_section_ids' => ['nullable', 'array'],
+            'additional_section_ids.*' => ['integer', 'distinct', 'exists:' . Section::getTableName() . ',id'],
         ];
     }
 

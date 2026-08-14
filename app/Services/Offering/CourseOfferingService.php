@@ -42,6 +42,7 @@ class CourseOfferingService {
             $attributes['created_by_id'] = Auth::id();
 
             $offering = CourseOffering::create($attributes);
+            $this->syncAdditionalSections($offering, $data);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
         } catch (\Throwable $exception) {
@@ -79,6 +80,7 @@ class CourseOfferingService {
 
             $offering->fill($this->buildAttributes($data));
             $offering->save();
+            $this->syncAdditionalSections($offering, $data);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
         } catch (\Throwable $exception) {
@@ -226,6 +228,56 @@ class CourseOfferingService {
      * @param array $data validated request payload
      * @return array
      */
+    /**
+     * Replace the cross-listed cohorts on an offering (C43).
+     *
+     * Absent key means "not editing this", which is not the same as an empty
+     * array meaning "remove them all" — a partial update that silently dropped
+     * the extra sections would un-cross-list a course without saying so.
+     *
+     * The OWNING section is filtered out if it appears: it lives on the
+     * offering itself, and listing it twice would double-count its students
+     * when a room is chosen.
+     *
+     * @param \App\Models\Offering\CourseOffering $offering
+     * @param array $data validated payload
+     *
+     * @return void
+     */
+    private function syncAdditionalSections(CourseOffering $offering, array $data): void {
+        if (!array_key_exists('additional_section_ids', $data)) {
+            return;
+        }
+
+        $sectionIds = collect($data['additional_section_ids'] ?? [])
+            ->map(fn ($id): int => (int) $id)
+            ->reject(fn (int $id): bool => $id === (int) $offering->section_id)
+            ->unique()
+            ->values();
+
+        $offering->additionalSections()->whereNotIn('section_id', $sectionIds)->delete();
+
+        foreach ($sectionIds as $sectionId) {
+            $existing = $offering->additionalSections()->where('section_id', $sectionId)->first();
+            if ($existing) {
+                continue;
+            }
+
+            $row = $offering->additionalSections()->make([
+                'section_id' => $sectionId,
+                // The cohort's own expected size, so the room decision counts
+                // everyone who will actually be in the room.
+                'expected_students' => Section::whereKey($sectionId)->value('expected_students'),
+            ]);
+
+            // `user_id` is not fillable anywhere in this codebase — it is the
+            // creator, not a submitted value, so it is assigned rather than
+            // taken from the payload.
+            $row->user_id = Auth::id();
+            $row->save();
+        }
+    }
+
     private function buildAttributes(array $data): array {
         return [
             'semester_id' => (int) $data['semester_id'],

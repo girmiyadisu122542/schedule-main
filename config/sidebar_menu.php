@@ -35,11 +35,13 @@ return SideBar::create([
             ]),
             SideBarItem::invigilation('ShieldCheckAltIcon', null, [
                 SideBarItem::invigilationRequests('SendPlaneIcon', FrontendPaths::INVIGILATION_REQUESTS),
-                SideBarItem::invigilatorAvailabilities('UserCheckIcon', FrontendPaths::INVIGILATOR_AVAILABILITIES),
                 SideBarItem::invigilatorAssignments('ShieldCheckAltIcon', FrontendPaths::INVIGILATOR_ASSIGNMENTS),
             ]),
             SideBarItem::reports('FileText', FrontendPaths::REPORTS),
-            SideBarItem::notifications('BellIcon', FrontendPaths::NOTIFICATIONS),
+            // Notifications is not built yet (audit C28). A menu item that
+            // leads to a placeholder teaches users the software is unfinished
+            // and they generalise that to the parts that do work — so it stays
+            // out of the sidebar until there is something behind it.
             SideBarItem::dynamicValues('InvoiceIcon', FrontendPaths::MANAGE_DYNAMIC_VALUES),
 
             SideBarItem::userAndAccess('Users', null, [

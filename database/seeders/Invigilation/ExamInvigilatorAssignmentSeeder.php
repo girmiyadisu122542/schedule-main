@@ -3,7 +3,7 @@
 namespace Database\Seeders\Invigilation;
 
 use App\Models\Invigilation\ExamInvigilatorAssignment;
-use App\Models\Invigilation\InvigilatorAvailability;
+use App\Models\People\Instructor;
 use App\Models\Schedule\ExamSchedule;
 use App\Models\User;
 use App\Services\Lookup\LookupService;
@@ -13,7 +13,7 @@ use Illuminate\Database\Seeder;
 class ExamInvigilatorAssignmentSeeder extends Seeder {
 
     /**
-     * Staff the seeded sittings from the offered availability windows, so the
+     * Staff the seeded sittings from the instructors who may invigilate, so the
      * duty roster screen has something real to show.
      *
      * This deliberately does NOT call the auto-assign service: a seeder has no
@@ -45,16 +45,17 @@ class ExamInvigilatorAssignmentSeeder extends Seeder {
         }
 
         foreach ($exams as $exam) {
-            // Containment, not overlap: a window that only half covers the
-            // sitting is no use to it.
-            $candidates = InvigilatorAvailability::query()
-                ->where('available_date', $exam->exam_date)
-                ->where('start_time', '<=', $exam->start_time)
-                ->where('end_time', '>=', $exam->end_time)
-                ->whereHas('instructor', fn ($query) => $query->where('can_invigilate', true)->where('is_active', true))
-                ->orderBy('instructor_id')
-                ->pluck('instructor_id')
-                ->unique()
+            // Anyone who may invigilate. The seeder deliberately does NOT go
+            // through the request workflow — seeding a registrar's ask and a
+            // department's answer just to produce demo duties would make the
+            // seeded data harder to read than the thing it demonstrates. Real
+            // staffing comes from submissions; this only fills the roster so
+            // the screens have something on them.
+            $candidates = Instructor::query()
+                ->where('can_invigilate', true)
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->pluck('id')
                 ->values();
 
             $placed = 0;

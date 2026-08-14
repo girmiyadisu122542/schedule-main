@@ -264,11 +264,23 @@ return [
         'is_system' => true,
         'values' => [
             ['name' => ['en' => 'Draft', 'am' => 'ረቂቅ'], 'code' => CLASS_SCHEDULE_STATUS_DRAFT, 'order' => 1, 'color' => '#6B7280', 'icon' => 'pencil', 'is_default' => true],
-            ['name' => ['en' => 'Published', 'am' => 'ታትሟል'], 'code' => CLASS_SCHEDULE_STATUS_PUBLISHED, 'order' => 2, 'color' => '#10B981', 'icon' => 'check-circle'],
-            ['name' => ['en' => 'Cancelled', 'am' => 'ተሰርዟል'], 'code' => CLASS_SCHEDULE_STATUS_CANCELLED, 'order' => 3, 'color' => '#EF4444', 'icon' => 'x-circle'],
+            ['name' => ['en' => 'Pending Confirmation', 'am' => 'ማረጋገጫ በመጠባበቅ ላይ'], 'code' => CLASS_SCHEDULE_STATUS_PENDING_CONFIRMATION, 'order' => 2, 'color' => '#F59E0B', 'icon' => 'clock'],
+            ['name' => ['en' => 'Confirmed', 'am' => 'ተረጋግጧል'], 'code' => CLASS_SCHEDULE_STATUS_CONFIRMED, 'order' => 3, 'color' => '#38BDF8', 'icon' => 'check'],
+            ['name' => ['en' => 'Published', 'am' => 'ታትሟል'], 'code' => CLASS_SCHEDULE_STATUS_PUBLISHED, 'order' => 4, 'color' => '#10B981', 'icon' => 'check-circle'],
+            ['name' => ['en' => 'Cancelled', 'am' => 'ተሰርዟል'], 'code' => CLASS_SCHEDULE_STATUS_CANCELLED, 'order' => 5, 'color' => '#EF4444', 'icon' => 'x-circle'],
         ],
+        // Two paths to publication, mirroring the exam lifecycle: straight out
+        // when nothing needs signing off, or via the department that owns the
+        // teaching load when it does. Which one applies is a matter of practice,
+        // not of code — both edges are legal and the registrar chooses.
         'transitions' => [
+            ['from' => CLASS_SCHEDULE_STATUS_DRAFT, 'to' => CLASS_SCHEDULE_STATUS_PENDING_CONFIRMATION],
             ['from' => CLASS_SCHEDULE_STATUS_DRAFT, 'to' => CLASS_SCHEDULE_STATUS_PUBLISHED],
+            ['from' => CLASS_SCHEDULE_STATUS_PENDING_CONFIRMATION, 'to' => CLASS_SCHEDULE_STATUS_CONFIRMED],
+            // Sending it back: the department disagrees and it returns to draft
+            // for the registrar to rework, rather than dying in limbo.
+            ['from' => CLASS_SCHEDULE_STATUS_PENDING_CONFIRMATION, 'to' => CLASS_SCHEDULE_STATUS_DRAFT],
+            ['from' => CLASS_SCHEDULE_STATUS_CONFIRMED, 'to' => CLASS_SCHEDULE_STATUS_PUBLISHED],
             ['from' => CLASS_SCHEDULE_STATUS_PUBLISHED, 'to' => CLASS_SCHEDULE_STATUS_CANCELLED],
         ],
     ],

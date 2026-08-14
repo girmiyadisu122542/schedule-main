@@ -62,6 +62,7 @@ define('PERMISSION_PUBLISH_CLASS_SCHEDULE', 'publish:class:schedule');
 define('PERMISSION_CANCEL_CLASS_SCHEDULE', 'cancel:class:schedule');
 
 // Schedule generation
+define('PERMISSION_CONFIRM_CLASS_SCHEDULE', 'confirm:class:schedule');
 define('PERMISSION_RUN_CLASS_SCHEDULE_GENERATION', 'run:class:schedule:generation');
 define('PERMISSION_RUN_EXAM_SCHEDULE_GENERATION', 'run:exam:schedule:generation');
 define('PERMISSION_SEE_SCHEDULE_GENERATION_RUN', 'see:schedule:generation:run');
@@ -80,9 +81,6 @@ define('PERMISSION_CANCEL_EXAM_SCHEDULE', 'cancel:exam:schedule');
 // Invigilation Related
 // An availability window is a statement, not a record to revise — hence
 // `submit` rather than `create`/`update`.
-define('PERMISSION_SEE_INVIGILATOR_AVAILABILITY', 'see:invigilator:availability');
-define('PERMISSION_SUBMIT_INVIGILATOR_AVAILABILITY', 'submit:invigilator:availability');
-define('PERMISSION_DELETE_INVIGILATOR_AVAILABILITY', 'delete:invigilator:availability');
 /**
  * The invigilator request/response exchange.
  *

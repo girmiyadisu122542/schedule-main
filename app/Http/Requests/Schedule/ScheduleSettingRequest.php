@@ -72,7 +72,22 @@ class ScheduleSettingRequest extends FormRequest {
             'exam_day_end' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT, 'after:exam_day_start'],
             'exam_duration_minutes' => ['required', 'integer', 'between:15,480'],
             'exam_gap_minutes' => ['nullable', 'integer', 'between:0,240'],
-            'exam_period_days' => ['required', 'integer', 'between:1,90'],
+            // Per exam type, keyed by the lookup CODE. Absent keys simply fall
+            // through to `exam_duration_minutes`, so a partial map is valid.
+            'exam_type_durations' => ['nullable', 'array'],
+            'exam_type_durations.*' => ['integer', 'between:15,480'],
+            // ---- what a cohort may be put through ----
+            'max_exams_per_day' => ['nullable', 'integer', 'between:1,8'],
+            'min_hours_between_exams' => ['nullable', 'integer', 'between:0,72'],
+            // ---- invigilator staffing ----
+            'students_per_invigilator' => ['nullable', 'integer', 'between:5,200'],
+            'min_invigilators_per_room' => ['nullable', 'integer', 'between:1,20'],
+            // ---- soft-constraint weights; 0 switches a preference off ----
+            'weight_spread_sessions' => ['nullable', 'integer', 'between:0,100'],
+            'weight_avoid_gaps' => ['nullable', 'integer', 'between:0,100'],
+            'weight_room_fit' => ['nullable', 'integer', 'between:0,100'],
+            'weight_same_building' => ['nullable', 'integer', 'between:0,100'],
+            'allow_cross_campus_day' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

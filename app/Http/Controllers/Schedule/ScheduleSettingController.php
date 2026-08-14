@@ -133,6 +133,30 @@ class ScheduleSettingController extends Controller {
     }
 
     /**
+     * Normalise the per-exam-type duration map.
+     *
+     * Empty stays null rather than becoming `{}` — the service tests for a
+     * missing key, and an empty object reads as "configured to nothing".
+     *
+     * @param array|null $durations
+     * @return array|null
+     */
+    private function durationMap(?array $durations): ?array {
+        if (empty($durations)) {
+            return null;
+        }
+
+        $map = [];
+        foreach ($durations as $code => $minutes) {
+            if ($minutes !== null && $minutes !== '') {
+                $map[(string) $code] = (int) $minutes;
+            }
+        }
+
+        return $map ?: null;
+    }
+
+    /**
      * Write a grid in one transaction.
      *
      * `teaching_days` is sorted and deduplicated on the way in so the stored
@@ -167,7 +191,18 @@ class ScheduleSettingController extends Controller {
                 'exam_day_end' => $data['exam_day_end'],
                 'exam_duration_minutes' => (int) $data['exam_duration_minutes'],
                 'exam_gap_minutes' => (int) ($data['exam_gap_minutes'] ?? 0),
-                'exam_period_days' => (int) $data['exam_period_days'],
+                // Codes to minutes. Cast on the way in so a "90" from a form
+                // does not come back out of jsonb as a string.
+                'exam_type_durations' => $this->durationMap($data['exam_type_durations'] ?? null),
+                'max_exams_per_day' => (int) ($data['max_exams_per_day'] ?? 2),
+                'min_hours_between_exams' => (int) ($data['min_hours_between_exams'] ?? 0),
+                'students_per_invigilator' => (int) ($data['students_per_invigilator'] ?? 50),
+                'min_invigilators_per_room' => (int) ($data['min_invigilators_per_room'] ?? 1),
+                'weight_spread_sessions' => (int) ($data['weight_spread_sessions'] ?? 10),
+                'weight_avoid_gaps' => (int) ($data['weight_avoid_gaps'] ?? 6),
+                'weight_room_fit' => (int) ($data['weight_room_fit'] ?? 3),
+                'weight_same_building' => (int) ($data['weight_same_building'] ?? 4),
+                'allow_cross_campus_day' => (bool) ($data['allow_cross_campus_day'] ?? false),
                 'is_active' => (bool) ($data['is_active'] ?? true),
             ]);
 

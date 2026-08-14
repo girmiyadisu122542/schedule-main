@@ -23,7 +23,7 @@ class ClassScheduleGeneratorController extends Controller {
      */
     public function generate(GenerateClassScheduleRequest $request): JsonResponse {
         try {
-            $result = app(ClassScheduleGeneratorService::class)->generate((int) $request->validated('semester_id'));
+            $result = app(ClassScheduleGeneratorService::class)->generate((int) $request->validated('semester_id'), (bool) $request->boolean('dry_run'));
         } catch (\Exception $exception) {
             return Response::_500(Message::get('unable_to_generate_class_schedules'));
         }
@@ -34,7 +34,9 @@ class ClassScheduleGeneratorController extends Controller {
 
         return Response::_201([
             'data' => $result->fresh(['semester', 'type', 'status', 'runBy'])->resource(),
-            'message' => Message::get('class_schedule_generation_completed', [
+            'message' => Message::get($request->boolean('dry_run')
+                ? 'class_schedule_dry_run_completed'
+                : 'class_schedule_generation_completed', [
                 'scheduled' => $result->scheduled_count,
                 'unplaced' => $result->unplaced_count,
             ]),

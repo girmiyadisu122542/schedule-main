@@ -79,7 +79,6 @@ class FrontendPaths {
     /** Invigilation */
     /** The registrar asks, departments answer — one screen, both sides. */
     public const INVIGILATION_REQUESTS = '/invigilation/requests';
-    public const INVIGILATOR_AVAILABILITIES = '/invigilation/availabilities';
     public const INVIGILATOR_ASSIGNMENTS = '/invigilation/assignments';
 
     /** Read-only published views */

@@ -3,7 +3,6 @@
 namespace App\Models\Academic;
 
 use App\Models\Common\Lookup\LookupValue;
-use App\Models\Invigilation\InvigilatorAvailability;
 use App\Models\Offering\CourseOffering;
 use App\Models\Schedule\ScheduleGenerationRun;
 use App\Models\User;
@@ -23,6 +22,8 @@ class Semester extends ScopedModel {
         'name' => 'array',
         'start_date' => 'date',
         'end_date' => 'date',
+        'exam_start_date' => 'date',
+        'exam_end_date' => 'date',
         'is_current' => 'boolean',
     ];
 
@@ -38,6 +39,8 @@ class Semester extends ScopedModel {
         'name',
         'start_date',
         'end_date',
+        'exam_start_date',
+        'exam_end_date',
         'status_lookup_value_id',
         'is_current',
         'user_id',
@@ -104,14 +107,6 @@ class Semester extends ScopedModel {
         return $this->hasMany(ScheduleGenerationRun::class);
     }
 
-    /**
-     * Relationship InvigilatorAvailability — the windows offered for its exam period.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
-     */
-    public function invigilatorAvailabilities(): HasMany {
-        return $this->hasMany(InvigilatorAvailability::class);
-    }
 
     /**
      * Fields returned by the list and detail endpoints.
@@ -129,6 +124,8 @@ class Semester extends ScopedModel {
             Field::isCurrent()->asBool(),
             Field::startDate(fn ($data) => $data->start_date?->format(DATE_FORMAT)),
             Field::endDate(fn ($data) => $data->end_date?->format(DATE_FORMAT)),
+            Field::examStartDate(fn ($data) => $data->exam_start_date?->format(DATE_FORMAT)),
+            Field::examEndDate(fn ($data) => $data->exam_end_date?->format(DATE_FORMAT)),
             // The status chip reads `status_code` + the lookup's own colour.
             Field::statusCode('status.code'),
             Field::makeResource('status', fields: 'idAndNameFields'),

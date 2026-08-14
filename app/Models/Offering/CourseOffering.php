@@ -179,6 +179,29 @@ class CourseOffering extends ScopedModel {
     }
 
     /**
+     * Relationship CourseOfferingSection — the extra cohorts that attend.
+     *
+     * Empty for the ordinary case. A cross-listed offering names the other
+     * sections here; the owning section stays on this row's own `section_id`.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function additionalSections(): HasMany {
+        return $this->hasMany(CourseOfferingSection::class);
+    }
+
+    /**
+     * Everyone sitting in the room: the owning cohort plus any cross-listed
+     * ones. This is the number a room has to hold.
+     *
+     * @return int
+     */
+    public function totalExpectedStudents(): int {
+        return (int) $this->expected_students
+            + (int) $this->additionalSections->sum(fn ($extra) => (int) $extra->expected_students);
+    }
+
+    /**
      * Fields returned by the list and detail endpoints.
      *
      * @return array
@@ -205,6 +228,10 @@ class CourseOffering extends ScopedModel {
             Field::makeResource('department', fields: 'idAndNameFields'),
             Field::makeResource('program', fields: 'idAndNameFields'),
             Field::makeResource('section', fields: 'idAndNameFields'),
+            // The other cohorts that attend, for a cross-listed offering.
+            // Empty for the ordinary case, which is most of them.
+            Field::makeCollection('additional_sections', 'additionalSections', fields: 'idAndNameFields'),
+            Field::make('total_expected_students', fn ($data) => $data->totalExpectedStudents()),
             Field::makeResource('instructor', fields: 'idAndNameFields'),
             Field::makeResource('created_by', 'createdBy', fields: 'idAndNameFields'),
             Field::makeResource('submitted_by', 'submittedBy', fields: 'idAndNameFields'),

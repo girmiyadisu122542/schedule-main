@@ -41,7 +41,7 @@ class ExamScheduleGeneratorService {
      *
      * @return \App\Models\Schedule\ScheduleGenerationRun|string
      */
-    public function generate(int $semesterId, string $examTypeCode = EXAM_TYPE_FINAL) {
+    public function generate(int $semesterId, string $examTypeCode = EXAM_TYPE_FINAL, bool $dryRun = false) {
         // ---- pre-flight checks (NO writes yet) ----
         $semester = Semester::with('status')->find($semesterId);
         if (!$semester) {
@@ -130,10 +130,34 @@ class ExamScheduleGeneratorService {
         } catch (\Throwable $exception) {
             $this->finishRun($run, $failedId, $scheduledCount, $unplacedCount, $summary, $startedAt);
 
+            // A rehearsal that fell over still has to leave nothing behind.
+            if ($dryRun) {
+                ExamSchedule::where('generation_run_id', $run->id)->delete();
+            }
+
             throw $exception;
         }
 
         $this->finishRun($run, $completedId, $scheduledCount, $unplacedCount, $summary, $startedAt);
+
+        // A rehearsal: the placements really happened, against the real
+        // constraints, so the answer is honest — then the rows are removed and
+        // the timetable is exactly as it was (C42).
+        //
+        // The rows do exist for the duration of the run, which is the price of
+        // giving a true answer: the only way to know a slot is free is to try
+        // to take it. Nothing else may be generating at the same time anyway.
+        if ($dryRun) {
+            ExamSchedule::where('generation_run_id', $run->id)->delete();
+            $run->forceFill(['is_dry_run' => true])->save();
+
+            return $run->refresh();
+        }
+
+        // Keep what this run laid down, so it can be put back if the next one
+        // turns out worse (C41). After finishRun, so a failed run leaves no
+        // snapshot to restore from.
+        app(ScheduleSnapshotService::class)->captureExamRun($run);
 
         return $run->refresh();
     }
@@ -184,26 +208,30 @@ class ExamScheduleGeneratorService {
      * @param \App\Models\Academic\Semester $semester
      * @return array<int, string>
      */
-    private function examDates(Semester $semester, ?ScheduleSetting $setting): array {
+    private function examDates(Semester $semester, ?ScheduleSetting $setting, ?string $examTypeCode = null): array {
         $settings = app(ScheduleSettingService::class);
         $examDays = $settings->examDays($setting);
 
-        // Cache per setting: every offering on the same study mode walks the
-        // same calendar, and a semester has hundreds of offerings.
-        $cacheKey = (string) ($setting?->id ?? 'default');
+        // Cache per setting AND per exam type: a midterm week and a final week
+        // are different calendars out of the same grid.
+        $cacheKey = (string) ($setting?->id ?? 'default') . ':' . ($examTypeCode ?? 'any');
         if (array_key_exists($cacheKey, $this->dateCache)) {
             return $this->dateCache[$cacheKey];
         }
 
-        $end = Carbon::parse($semester->end_date);
-        $start = $end->copy()->subDays($settings->examPeriodDays($setting));
+        // The window is DECLARED, never inferred. Two levels, both real dates a
+        // registrar has published: a per-exam-type override when a midterm week
+        // differs from the final week, otherwise the semester's own exam
+        // period, which is mandatory and therefore always present.
+        //
+        // Nothing is derived from `exam_period_days` any more. Counting back
+        // from the end of term produced dates nobody had announced, and when it
+        // placed nothing there was no way to tell whether the period was wrong
+        // or the halls were full.
+        $declared = $settings->declaredExamWindow($semester, $examTypeCode);
 
-        // A semester shorter than the exam period still gets one: start no
-        // earlier than the semester itself.
-        $semesterStart = Carbon::parse($semester->start_date);
-        if ($start->lessThan($semesterStart)) {
-            $start = $semesterStart->copy();
-        }
+        $start = Carbon::parse($declared['start'] ?? $semester->exam_start_date);
+        $end = Carbon::parse($declared['end'] ?? $semester->exam_end_date);
 
         $dates = [];
         for ($date = $start->copy(); $date->lessThanOrEqualTo($end); $date->addDay()) {
@@ -337,77 +365,277 @@ class ExamScheduleGeneratorService {
      * @return array{date: string|null, reason: string|null}
      */
     private function placeSitting(CourseOffering $offering, Collection $rooms, Semester $semester, ScheduleGenerationRun $run, int $examTypeId, int $draftStatusId): array {
-        $candidateRooms = $rooms->filter(
-            fn (Room $room): bool => ($room->exam_capacity ?? $room->capacity) >= $offering->expected_students
-        )->values();
-
-        if ($candidateRooms->isEmpty()) {
-            return ['date' => null, 'reason' => 'no_exam_venue_large_enough'];
-        }
-
-        // The grid comes from the offering's study mode; the LENGTH comes from
-        // its course, so a two-hour paper and a three-hour paper get different
-        // windows out of the same exam day.
         $settings = app(ScheduleSettingService::class);
         $setting = $settings->forOffering($offering);
-        $dates = $this->examDates($semester, $setting);
-        $windows = $settings->examWindows($setting, $settings->examDurationFor($offering, $setting));
+        $examTypeCode = LookupService::getValueById($examTypeId)?->code;
+
+        // Everyone who sits this paper, including any cross-listed cohorts.
+        $seatsNeeded = $offering->totalExpectedStudents();
+
+        // The grid comes from the offering's study mode; the LENGTH resolves
+        // course -> exam type -> the mode's default, so a ninety-minute midterm
+        // and a three-hour final get different windows out of the same day.
+        $dates = $this->examDates($semester, $setting, $examTypeCode);
+        $windows = $settings->examWindows($setting, $settings->examDurationFor($offering, $setting, $examTypeCode));
 
         if (empty($dates) || empty($windows)) {
             return ['date' => null, 'reason' => 'semester_has_no_exam_period'];
         }
 
+        // Halls that take the whole cohort on their own, smallest first.
+        $wholeRooms = $rooms->filter(
+            fn (Room $room): bool => $this->seats($room) >= $seatsNeeded
+        )->values();
+
+        // No single hall is big enough — the normal case for a large cohort,
+        // not an error. The paper is then split across several halls sitting it
+        // at the same hour (C9).
+        $split = $wholeRooms->isEmpty() ? $this->chooseHalls($rooms, $seatsNeeded) : null;
+
+        if ($wholeRooms->isEmpty() && $split === null) {
+            return ['date' => null, 'reason' => 'no_exam_venue_large_enough'];
+        }
+
+        $maxPerDay = $settings->maxExamsPerDay($setting);
+        $minGapMinutes = $settings->minMinutesBetweenExams($setting);
+        $sectionIds = array_values(array_filter(array_merge(
+            [$offering->section_id ? (int) $offering->section_id : null],
+            $offering->additionalSections->pluck('section_id')->map(fn ($id): int => (int) $id)->all(),
+        )));
+
         $lastConflict = 'no_free_exam_slot_found';
 
         foreach ($dates as $date) {
+            // Three papers in one day is legal under the overlap rule and
+            // indefensible to a student. So is a second paper starting as the
+            // first one ends (C8).
+            if ($this->tooManyExamsOn($sectionIds, $date, $maxPerDay)) {
+                $lastConflict = 'cohort_has_too_many_exams_that_day';
+
+                continue;
+            }
+
             foreach ($windows as $slot) {
-                foreach ($candidateRooms as $room) {
-                    $attributes = [
-                        'course_offering_id' => $offering->id,
-                        'semester_id' => $offering->semester_id,
-                        'section_id' => $offering->section_id,
-                        'exam_type_lookup_value_id' => $examTypeId,
-                        'exam_date' => $date,
-                        'start_time' => $slot['start'],
-                        'end_time' => $slot['end'],
-                        'room_id' => $room->id,
-                        'required_invigilators' => ScheduleConstant::DEFAULT_REQUIRED_INVIGILATORS,
-                        'status_lookup_value_id' => $draftStatusId,
-                        'state' => STATE_ACTIVE,
-                        'generation_run_id' => $run->id,
-                        'created_by_id' => Auth::id(),
-                    ];
+                if ($minGapMinutes > 0 && $this->tooCloseToAnotherExam($sectionIds, $date, $slot, $minGapMinutes)) {
+                    $lastConflict = 'exams_too_close_together';
 
-                    try {
-                        DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+                    continue;
+                }
 
-                        ExamSchedule::create($attributes);
+                // One hall if the cohort fits in one, otherwise the split set.
+                $attempts = $split !== null
+                    ? [$split]
+                    : $wholeRooms->map(fn (Room $room): array => [['room' => $room, 'seats' => $seatsNeeded]])->all();
 
-                        DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
-                    } catch (QueryException $exception) {
-                        DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+                foreach ($attempts as $halls) {
+                    $written = $this->writeSitting($offering, $halls, $date, $slot, $semester, $run, $examTypeId, $draftStatusId, $setting);
 
-                        $conflict = ExamScheduleService::conflictKey($exception);
-                        if (!$conflict) {
-                            throw $exception;
-                        }
-
-                        // A second sitting of this type is not a placement
-                        // problem — no other date or hall will fix it.
-                        if ($conflict === 'exam_already_scheduled_for_offering') {
-                            return ['date' => null, 'reason' => $conflict];
-                        }
-
-                        $lastConflict = $conflict;
-
-                        continue;
+                    if ($written === null) {
+                        return ['date' => $date, 'reason' => null];
                     }
 
-                    return ['date' => $date, 'reason' => null];
+                    // A second sitting of this type is not a placement problem
+                    // — no other date or hall will fix it.
+                    if ($written === 'exam_already_scheduled_for_offering') {
+                        return ['date' => null, 'reason' => $written];
+                    }
+
+                    $lastConflict = $written;
                 }
             }
         }
 
         return ['date' => null, 'reason' => $lastConflict];
+    }
+
+    /**
+     * How many seats a hall offers an exam.
+     *
+     * `exam_capacity` is the spaced-seating figure and is the right number
+     * here; `capacity` is the teaching figure and is only the fallback.
+     *
+     * @param \App\Models\Physical\Room $room
+     * @return int
+     */
+    private function seats(Room $room): int {
+        return (int) ($room->exam_capacity ?? $room->capacity);
+    }
+
+    /**
+     * Pick the fewest halls that between them seat the whole cohort.
+     *
+     * Largest first, so a 300-strong cohort becomes two halls rather than
+     * seven — every extra hall is another set of invigilators and another
+     * place for a paper to go missing.
+     *
+     * @param \Illuminate\Support\Collection $rooms
+     * @param int $seatsNeeded
+     *
+     * @return array<int, array{room: \App\Models\Physical\Room, seats: int}>|null null when even every hall together is too small
+     */
+    private function chooseHalls(Collection $rooms, int $seatsNeeded): ?array {
+        $ordered = $rooms->sortByDesc(fn (Room $room): int => $this->seats($room))->values();
+
+        $chosen = [];
+        $remaining = $seatsNeeded;
+
+        foreach ($ordered as $room) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $take = min($remaining, $this->seats($room));
+            if ($take <= 0) {
+                continue;
+            }
+
+            $chosen[] = ['room' => $room, 'seats' => $take];
+            $remaining -= $take;
+        }
+
+        return $remaining > 0 ? null : $chosen;
+    }
+
+    /**
+     * Write one sitting — or its several parts — inside a single transaction.
+     *
+     * All-or-nothing on purpose: half a split sitting is worse than none, since
+     * it seats part of the cohort and silently leaves the rest without a hall.
+     *
+     * @param \App\Models\Offering\CourseOffering $offering
+     * @param array<int, array{room: \App\Models\Physical\Room, seats: int}> $halls
+     * @param string $date
+     * @param array<string, string> $slot
+     * @param \App\Models\Academic\Semester $semester
+     * @param \App\Models\Schedule\ScheduleGenerationRun $run
+     * @param int $examTypeId
+     * @param int $draftStatusId
+     * @param \App\Models\Schedule\ScheduleSetting|null $setting
+     *
+     * @return string|null null on success, otherwise the conflict key
+     */
+    private function writeSitting(CourseOffering $offering, array $halls, string $date, array $slot, Semester $semester, ScheduleGenerationRun $run, int $examTypeId, int $draftStatusId, ?ScheduleSetting $setting): ?string {
+        $settings = app(ScheduleSettingService::class);
+        $partCount = count($halls);
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            foreach ($halls as $index => $hall) {
+                ExamSchedule::create([
+                    'course_offering_id' => $offering->id,
+                    'semester_id' => $offering->semester_id,
+                    // Only the FIRST part carries the cohort.
+                    //
+                    // `es_no_section_clash` is a partial EXCLUDE — it ignores
+                    // rows whose section_id is null. Every part of one paper is
+                    // the same cohort at the same hour, so carrying the section
+                    // on all of them would make the parts reject each other.
+                    // Part 1 holds the section and so still blocks any OTHER
+                    // exam for that cohort in the window, which is the whole
+                    // point of the constraint; the remaining parts are seat
+                    // allocations of a sitting that is already protected.
+                    'section_id' => $index === 0 ? $offering->section_id : null,
+                    'exam_type_lookup_value_id' => $examTypeId,
+                    'exam_date' => $date,
+                    'start_time' => $slot['start'],
+                    'end_time' => $slot['end'],
+                    'room_id' => $hall['room']->id,
+                    'seat_allocation' => $hall['seats'],
+                    'part_number' => $index + 1,
+                    'part_count' => $partCount,
+                    // Derived from how many actually sit in THIS hall, not
+                    // typed and not copied from the cohort total (C11).
+                    'required_invigilators' => $settings->invigilatorsFor($setting, (int) $hall['seats']),
+                    'status_lookup_value_id' => $draftStatusId,
+                    'state' => STATE_ACTIVE,
+                    'generation_run_id' => $run->id,
+                    'created_by_id' => Auth::id(),
+                ]);
+            }
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (QueryException $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+            $conflict = ExamScheduleService::conflictKey($exception);
+            if (!$conflict) {
+                throw $exception;
+            }
+
+            return $conflict;
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether any of these cohorts already has its day's worth of exams.
+     *
+     * @param array<int, int> $sectionIds
+     * @param string $date
+     * @param int $maxPerDay
+     *
+     * @return bool
+     */
+    private function tooManyExamsOn(array $sectionIds, string $date, int $maxPerDay): bool {
+        if (empty($sectionIds)) {
+            return false;
+        }
+
+        // A split sitting is several rows but one paper, so count distinct
+        // offerings rather than rows — otherwise a three-hall exam alone looks
+        // like three exams and blocks the day.
+        $count = ExamSchedule::query()
+            ->whereIn('section_id', $sectionIds)
+            ->whereDate('exam_date', $date)
+            ->where('state', STATE_ACTIVE)
+            ->distinct()
+            ->count('course_offering_id');
+
+        return $count >= $maxPerDay;
+    }
+
+    /**
+     * Whether this window leaves a cohort too little rest either side.
+     *
+     * @param array<int, int> $sectionIds
+     * @param string $date
+     * @param array<string, string> $slot
+     * @param int $minGapMinutes
+     *
+     * @return bool
+     */
+    private function tooCloseToAnotherExam(array $sectionIds, string $date, array $slot, int $minGapMinutes): bool {
+        if (empty($sectionIds)) {
+            return false;
+        }
+
+        $gapSeconds = $minGapMinutes * 60;
+        $start = strtotime($date . ' ' . $slot['start']);
+        $end = strtotime($date . ' ' . $slot['end']);
+
+        $sameDay = ExamSchedule::query()
+            ->whereIn('section_id', $sectionIds)
+            ->whereDate('exam_date', $date)
+            ->where('state', STATE_ACTIVE)
+            ->get(['start_time', 'end_time']);
+
+        foreach ($sameDay as $existing) {
+            $existingStart = strtotime($date . ' ' . $existing->start_time);
+            $existingEnd = strtotime($date . ' ' . $existing->end_time);
+
+            // Overlaps are already impossible; what is being measured is the
+            // rest between two windows that do not touch.
+            $gap = $start >= $existingEnd
+                ? $start - $existingEnd
+                : ($existingStart >= $end ? $existingStart - $end : 0);
+
+            if ($gap < $gapSeconds) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
