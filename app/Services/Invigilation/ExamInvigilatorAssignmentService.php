@@ -7,6 +7,7 @@ use App\Models\Invigilation\InvigilationSubmission;
 use App\Models\People\Instructor;
 use App\Models\Schedule\ExamSchedule;
 use App\Services\Lookup\LookupService;
+use App\Services\Schedule\ScheduleConflictGuard;
 use Constants\AppConstant;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -27,7 +28,7 @@ class ExamInvigilatorAssignmentService {
      */
     public const CONFLICT_KEYS = [
         'eia_no_double_booking' => 'invigilator_already_assigned',
-        'exam_invigilator_assignments_exam_schedule_id_instructor_id' => 'invigilator_already_on_this_exam',
+        'eia_exam_instructor_unique' => 'invigilator_already_on_this_exam',
     ];
 
     /**
@@ -211,6 +212,21 @@ class ExamInvigilatorAssignmentService {
             $assignment->remark = $remark ?? $assignment->remark;
             $assignment->save();
 
+            // Checked AFTER the outgoing row is released, which is what lets the
+            // replacement take the window the person leaving was holding.
+            $conflict = ScheduleConflictGuard::invigilatorAssignment([
+                'instructor_id' => $newInstructorId,
+                'exam_date' => $exam->exam_date,
+                'start_time' => $exam->start_time,
+                'end_time' => $exam->end_time,
+            ]);
+
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
             $replacement = ExamInvigilatorAssignment::create([
                 'exam_schedule_id' => $exam->id,
                 'instructor_id' => $newInstructorId,
@@ -375,6 +391,22 @@ class ExamInvigilatorAssignmentService {
     private function writeAssignment(ExamSchedule $exam, int $instructorId, int $roleId, int $statusId, ?string $remark) {
         try {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            // `eia_no_double_booking` used to decide this; MySQL cannot express
+            // that constraint, so the guard does — inside this transaction, so
+            // its locking read holds the invigilator's window until the commit.
+            $conflict = ScheduleConflictGuard::invigilatorAssignment([
+                'instructor_id' => $instructorId,
+                'exam_date' => $exam->exam_date,
+                'start_time' => $exam->start_time,
+                'end_time' => $exam->end_time,
+            ]);
+
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
 
             $assignment = ExamInvigilatorAssignment::create([
                 'exam_schedule_id' => $exam->id,

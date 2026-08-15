@@ -50,9 +50,13 @@ return new class extends Migration {
             $table->foreignId('assigned_by_id')->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
 
             // Nobody is assigned twice to one exam.
-            $table->unique(['exam_schedule_id', 'instructor_id']);
+            // Named explicitly — the generated name exceeds MySQL's 64-character
+            // identifier limit. ExamInvigilatorAssignmentService::CONFLICT_KEYS
+            // matches on this name, so the two must stay in step.
+            $table->unique(['exam_schedule_id', 'instructor_id'], 'eia_exam_instructor_unique');
 
             $table->index('exam_schedule_id');
+            // Also what the double-booking check in ScheduleConflictGuard reads.
             $table->index(['instructor_id', 'exam_date']);
         });
 
@@ -65,18 +69,16 @@ return new class extends Migration {
             ON UPDATE CASCADE ON DELETE CASCADE
         SQL);
 
-        // An invigilator cannot be at two exams at once. Same tsrange overlap as
-        // the exam constraints, because a duty is a single dated event too.
-        $active = STATE_ACTIVE;
-
-        DB::statement(<<<SQL
-            ALTER TABLE exam_invigilator_assignments
-            ADD CONSTRAINT eia_no_double_booking
-            EXCLUDE USING gist (
-                instructor_id WITH =,
-                tsrange(exam_date + start_time, exam_date + end_time) WITH &&
-            ) WHERE (state = {$active})
-        SQL);
+        // An invigilator cannot be at two exams at once. This was a GiST EXCLUDE
+        // constraint on PostgreSQL; MySQL cannot express it, so
+        // ExamInvigilatorAssignmentService enforces it through
+        // ScheduleConflictGuard inside its write transaction.
+        //
+        // One guarantee genuinely does not survive the port: the ON UPDATE
+        // CASCADE above still moves every duty row when a sitting is
+        // rescheduled, but MySQL will no longer re-check double-booking as it
+        // cascades. ExamScheduleService therefore has to re-validate the duty
+        // roster itself after moving a sitting.
     }
 
     /**

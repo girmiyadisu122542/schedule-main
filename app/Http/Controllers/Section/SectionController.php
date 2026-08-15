@@ -57,8 +57,8 @@ class SectionController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->where('label', 'ilike', "%{$search}%")
-                            ->orWhereHas('program', fn ($query) => $query->where('code', 'ilike', "%{$search}%"));
+                            ->where('label', 'like', "%{$search}%")
+                            ->orWhereHas('program', fn ($query) => $query->where('code', 'like', "%{$search}%"));
                     });
             })
             ->when($request->input('program_id'), fn ($query) => $query->where('program_id', (int) $request->input('program_id')))

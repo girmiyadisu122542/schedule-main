@@ -469,6 +469,18 @@ class ClassScheduleGeneratorService {
             try {
                 DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
+                // The three EXCLUDE constraints used to reject a taken slot;
+                // MySQL cannot express them, so the guard decides. Same loop
+                // either way: a rejected candidate just moves on to the next.
+                $clash = ScheduleConflictGuard::classSchedule($attributes);
+                if ($clash !== null) {
+                    DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                    $lastConflict = $clash;
+
+                    continue;
+                }
+
                 ClassSchedule::create($attributes);
 
                 DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

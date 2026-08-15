@@ -85,6 +85,12 @@ return new class extends Migration {
             $table->index(['room_id', 'day_of_week']);
             $table->index(['instructor_id', 'day_of_week']);
             $table->index(['semester_id', 'status_lookup_value_id']);
+
+            // New for the MySQL port. The room and instructor clash checks in
+            // ScheduleConflictGuard read the two indexes above; the section
+            // check had no equivalent, because on PostgreSQL the GiST EXCLUDE
+            // constraint carried its own index and nothing else needed one.
+            $table->index(['section_id', 'day_of_week']);
         });
 
         // Composite FKs — the mirrored semester_id / section_id cannot drift
@@ -96,8 +102,8 @@ return new class extends Migration {
             FOREIGN KEY (course_offering_id, semester_id)
             REFERENCES course_offerings (id, semester_id) ON UPDATE CASCADE
         SQL);
-        // MATCH SIMPLE (the default) lets a section-less meeting through: with
-        // section_id NULL the whole key is treated as satisfied.
+        // InnoDB, like PostgreSQL's MATCH SIMPLE, lets a section-less meeting
+        // through: with section_id NULL the whole key is treated as satisfied.
         DB::statement(<<<'SQL'
             ALTER TABLE class_schedules
             ADD CONSTRAINT class_schedules_offering_section_foreign
@@ -109,43 +115,15 @@ return new class extends Migration {
         DB::statement('ALTER TABLE class_schedules ADD CONSTRAINT class_schedules_time_check CHECK (end_time > start_time)');
 
         // ---- the conflict engine ----
-        // Three EXCLUDE constraints, all predicated on the liveness flag. The
-        // predicate cannot name a lookup value without hard-coding its id in
-        // DDL, which is exactly why `state` exists alongside the status.
-        $active = STATE_ACTIVE;
-
-        DB::statement(<<<SQL
-            ALTER TABLE class_schedules
-            ADD CONSTRAINT cs_no_instructor_clash
-            EXCLUDE USING gist (
-                semester_id   WITH =,
-                instructor_id WITH =,
-                day_of_week   WITH =,
-                timerange(start_time, end_time) WITH &&
-            ) WHERE (state = {$active} AND instructor_id IS NOT NULL)
-        SQL);
-
-        DB::statement(<<<SQL
-            ALTER TABLE class_schedules
-            ADD CONSTRAINT cs_no_room_clash
-            EXCLUDE USING gist (
-                semester_id WITH =,
-                room_id     WITH =,
-                day_of_week WITH =,
-                timerange(start_time, end_time) WITH &&
-            ) WHERE (state = {$active} AND room_id IS NOT NULL)
-        SQL);
-
-        DB::statement(<<<SQL
-            ALTER TABLE class_schedules
-            ADD CONSTRAINT cs_no_section_clash
-            EXCLUDE USING gist (
-                semester_id WITH =,
-                section_id  WITH =,
-                day_of_week WITH =,
-                timerange(start_time, end_time) WITH &&
-            ) WHERE (state = {$active} AND section_id IS NOT NULL)
-        SQL);
+        // On PostgreSQL this was three GiST EXCLUDE constraints — instructor,
+        // room and section could not be double-booked, enforced by the storage
+        // engine itself. MySQL has no EXCLUDE and no range types, so there is
+        // no DDL that says this; the same three rules are now enforced in
+        // ScheduleConflictGuard, which ClassScheduleService calls inside the
+        // write transaction with the candidate rows locked FOR UPDATE.
+        //
+        // The `state` flag still exists and still means the same thing — the
+        // guard's queries filter on it exactly where the EXCLUDE predicates did.
     }
 
     /**

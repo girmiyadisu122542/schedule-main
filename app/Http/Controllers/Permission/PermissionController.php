@@ -55,7 +55,7 @@ class PermissionController extends Controller {
                     ->where(function ($query) use ($search) {
                         $query
                             ->orJsonbLangValueSearch('name', $search)
-                            ->orWhere('key', 'ilike', '%' . $search . '%');
+                            ->orWhere('key', 'like', '%' . $search . '%');
                     });
             })
             ->when(!is_null($uniquePerUser), fn ($query) => $query->where('unique_per_user', $uniquePerUser))

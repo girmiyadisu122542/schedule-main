@@ -51,7 +51,9 @@ return new class extends Migration {
             $table->foreignId('status_lookup_value_id')->constrained(LookupValue::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('run_by_id')->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
 
-            $table->index(['semester_id', 'type_lookup_value_id', 'started_at']);
+            // Named explicitly — the generated name exceeds MySQL's 64-character
+            // identifier limit.
+            $table->index(['semester_id', 'type_lookup_value_id', 'started_at'], 'sgr_semester_type_started_index');
         });
 
         DB::statement('ALTER TABLE schedule_generation_runs ADD CONSTRAINT schedule_generation_runs_scheduled_count_check CHECK (scheduled_count >= 0)');

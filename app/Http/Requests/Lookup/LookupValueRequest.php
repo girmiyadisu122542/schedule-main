@@ -38,7 +38,7 @@ class LookupValueRequest extends FormRequest {
 
                     $query = LookupValue::query()
                         ->where('lookup_type_id', $lookupTypeId)
-                        ->whereRaw("LOWER(name->>?) = LOWER(?)", [$language, $val]);
+                        ->jsonbLangExactValue('name', $language, $val);
 
                     if ($ignoreId) {
                         $query->where('id', '!=', $ignoreId);

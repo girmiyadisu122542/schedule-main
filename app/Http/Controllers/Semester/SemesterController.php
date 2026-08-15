@@ -42,7 +42,7 @@ class SemesterController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->whereHas('academicYear', fn ($query) => $query->where('code', 'ilike', "%{$search}%"))
+                            ->whereHas('academicYear', fn ($query) => $query->where('code', 'like', "%{$search}%"))
                             ->orWhere(fn ($query) => $query->jsonbLangValueSearch('name', $search, true));
                     });
             })

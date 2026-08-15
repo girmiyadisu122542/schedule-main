@@ -522,15 +522,16 @@ class ExamScheduleGeneratorService {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
             foreach ($halls as $index => $hall) {
-                ExamSchedule::create([
+                $attributes = [
                     'course_offering_id' => $offering->id,
                     'semester_id' => $offering->semester_id,
                     // Only the FIRST part carries the cohort.
                     //
-                    // `es_no_section_clash` is a partial EXCLUDE — it ignores
-                    // rows whose section_id is null. Every part of one paper is
-                    // the same cohort at the same hour, so carrying the section
-                    // on all of them would make the parts reject each other.
+                    // The section clash check ignores rows whose section_id is
+                    // null — as the `es_no_section_clash` EXCLUDE constraint did
+                    // before it. Every part of one paper is the same cohort at
+                    // the same hour, so carrying the section on all of them
+                    // would make the parts reject each other.
                     // Part 1 holds the section and so still blocks any OTHER
                     // exam for that cohort in the window, which is the whole
                     // point of the constraint; the remaining parts are seat
@@ -551,7 +552,20 @@ class ExamScheduleGeneratorService {
                     'state' => STATE_ACTIVE,
                     'generation_run_id' => $run->id,
                     'created_by_id' => Auth::id(),
-                ]);
+                ];
+
+                // The two EXCLUDE constraints used to reject a taken hall or a
+                // busy cohort; MySQL cannot express them, so the guard decides.
+                // Rolling back here abandons the whole sitting, parts included,
+                // exactly as a constraint violation mid-loop used to.
+                $clash = ScheduleConflictGuard::examSchedule($attributes);
+                if ($clash !== null) {
+                    DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                    return $clash;
+                }
+
+                ExamSchedule::create($attributes);
             }
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

@@ -57,7 +57,7 @@ class RoomController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->where('code', 'ilike', "%{$search}%")
+                            ->where('code', 'like', "%{$search}%")
                             ->orWhere(fn ($query) => $query->jsonbLangValueSearch('name', $search, true));
                     });
             })

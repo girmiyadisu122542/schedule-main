@@ -42,8 +42,8 @@ trait IndexUserAction {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->orWhere('phone', 'ilike', "%{$search}%")
-                            ->orWhere('email', 'ilike', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
                             ->orJsonbLangValueSearch('full_name', $search);
                     });
             })

@@ -51,24 +51,39 @@ return new class extends Migration {
             $table->foreignId('created_by_id')->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
             $table->foreignId('submitted_by_id')->nullable()->constrained(User::getTableName())->restrictOnUpdate()->restrictOnDelete();
 
-            $table->unique(['semester_id', 'course_id', 'section_id']);
-            $table->index(['semester_id', 'department_id', 'status_lookup_value_id']);
+            // NOT a unique on (semester_id, course_id, section_id): MySQL, like
+            // PostgreSQL, treats NULLs as distinct, so every section-less row
+            // would slip through it. The real uniqueness is declared below on a
+            // generated column that folds NULL down to 0.
+            // Named explicitly: the generated name would be 71 characters, and
+            // MySQL rejects an identifier over 64 (PostgreSQL silently truncated
+            // at 63, so this only surfaces on MySQL).
+            $table->index(['semester_id', 'department_id', 'status_lookup_value_id'], 'course_offerings_semester_dept_status_index');
             $table->index('status_lookup_value_id');
             $table->index('instructor_id');
             $table->index('section_id');
         });
 
-        // A section-less offering (a whole-cohort lecture) may still appear only
-        // once per semester. The composite unique above cannot enforce that:
-        // PostgreSQL treats NULLs as distinct, so every section_id IS NULL row
-        // would slip through.
-        DB::statement('CREATE UNIQUE INDEX course_offerings_semester_course_no_section_unique ON course_offerings (semester_id, course_id) WHERE section_id IS NULL');
+        // One offering per semester + course + section, AND — because a
+        // section-less offering is a whole-cohort lecture — only one such row
+        // per semester + course. PostgreSQL needed a plain unique plus a
+        // partial unique for that; MySQL has no partial index, so folding NULL
+        // to 0 in a generated column expresses both rules in one index.
+        DB::statement(
+            'ALTER TABLE course_offerings'
+            . ' ADD COLUMN section_unique_key BIGINT UNSIGNED'
+            . ' GENERATED ALWAYS AS (COALESCE(section_id, 0)) STORED'
+        );
+        DB::statement(
+            'CREATE UNIQUE INDEX course_offerings_semester_course_section_unique'
+            . ' ON course_offerings (semester_id, course_id, section_unique_key)'
+        );
 
         // Helper uniques — the targets `class_schedules` and `exam_schedules`
         // point their composite FKs at, so a schedule row's mirrored
         // semester_id / section_id can never drift from the offering's own.
-        // These must be real UNIQUE CONSTRAINTS, not plain indexes: a composite
-        // FK can only reference a constraint.
+        // InnoDB requires the referenced columns to be indexed; a unique index
+        // is what makes the reference one-to-one.
         DB::statement('ALTER TABLE course_offerings ADD CONSTRAINT course_offerings_id_semester_unique UNIQUE (id, semester_id)');
         DB::statement('ALTER TABLE course_offerings ADD CONSTRAINT course_offerings_id_section_unique UNIQUE (id, section_id)');
 
@@ -81,7 +96,6 @@ return new class extends Migration {
      * @return void
      */
     public function down(): void {
-        DB::statement('DROP INDEX IF EXISTS course_offerings_semester_course_no_section_unique');
         Schema::dropIfExists(CourseOffering::getTableName());
     }
 };

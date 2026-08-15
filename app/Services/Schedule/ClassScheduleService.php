@@ -15,9 +15,14 @@ use Illuminate\Support\Facades\DB;
 class ClassScheduleService {
 
     /**
-     * Which conflict constraint maps to which error key. Clash detection is the
-     * database's job (three EXCLUDE constraints); this service's job is to turn
-     * the resulting QueryException back into something a user can read.
+     * Which conflict constraint maps to which error key.
+     *
+     * Clash detection used to be entirely the database's job — three GiST
+     * EXCLUDE constraints. MySQL cannot express those, so
+     * {@see ScheduleConflictGuard::classSchedule()} now decides, and this map
+     * survives for the constraints MySQL still enforces itself (the composite
+     * uniques and foreign keys), whose violations still arrive as a
+     * QueryException.
      *
      * @var array<string, string>
      */
@@ -59,6 +64,15 @@ class ClassScheduleService {
             $attributes['status_lookup_value_id'] = $draftId;
             $attributes['state'] = STATE_ACTIVE;
             $attributes['created_by_id'] = Auth::id();
+
+            // Inside the transaction, before the write: the guard's locking read
+            // only holds the slot for as long as this transaction does.
+            $conflict = ScheduleConflictGuard::classSchedule($attributes);
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
 
             $schedule = ClassSchedule::create($attributes);
 
@@ -109,6 +123,18 @@ class ClassScheduleService {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
             $schedule->fill($this->buildAttributes($offering, $data));
+
+            // Only a live row was ever policed by the EXCLUDE constraints, and
+            // the row being moved must not clash with itself.
+            $conflict = (int) $schedule->state === STATE_ACTIVE
+                ? ScheduleConflictGuard::classSchedule($schedule->getAttributes(), $schedule->id)
+                : null;
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
             $schedule->save();
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

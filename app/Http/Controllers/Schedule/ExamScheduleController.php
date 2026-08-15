@@ -64,9 +64,9 @@ class ExamScheduleController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->whereHas('courseOffering.course', fn ($query) => $query->where('code', 'ilike', "%{$search}%"))
+                            ->whereHas('courseOffering.course', fn ($query) => $query->where('code', 'like', "%{$search}%"))
                             ->orWhereHas('courseOffering.course', fn ($query) => $query->jsonbLangValueSearch('title', $search, true))
-                            ->orWhereHas('room', fn ($query) => $query->where('code', 'ilike', "%{$search}%"));
+                            ->orWhereHas('room', fn ($query) => $query->where('code', 'like', "%{$search}%"));
                     });
             })
             ->when($request->input('semester_id'), fn ($query) => $query->where('semester_id', (int) $request->input('semester_id')))

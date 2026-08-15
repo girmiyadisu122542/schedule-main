@@ -56,8 +56,15 @@ return new class extends Migration {
         DB::statement('ALTER TABLE semesters ADD CONSTRAINT semesters_exam_within_term_check CHECK (exam_start_date >= start_date AND exam_end_date <= end_date)');
         DB::statement('ALTER TABLE semesters ADD CONSTRAINT semesters_term_check CHECK (term IN (1, 2, 3))');
 
-        // Exactly one current semester across the whole institution.
-        DB::statement('CREATE UNIQUE INDEX semesters_is_current_unique ON semesters (is_current) WHERE is_current = true');
+        // Exactly one current semester across the whole institution. MySQL has
+        // no partial index, so the predicate becomes a generated column that is
+        // 1 only for the current row and NULL for the rest.
+        DB::statement(
+            'ALTER TABLE semesters'
+            . ' ADD COLUMN is_current_unique_key TINYINT'
+            . ' GENERATED ALWAYS AS (CASE WHEN is_current = 1 THEN 1 ELSE NULL END) STORED'
+        );
+        DB::statement('CREATE UNIQUE INDEX semesters_is_current_unique ON semesters (is_current_unique_key)');
     }
 
     /**
@@ -66,7 +73,6 @@ return new class extends Migration {
      * @return void
      */
     public function down(): void {
-        DB::statement('DROP INDEX IF EXISTS semesters_is_current_unique');
         Schema::dropIfExists(Semester::getTableName());
     }
 };

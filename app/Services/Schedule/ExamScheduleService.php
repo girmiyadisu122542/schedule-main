@@ -62,6 +62,15 @@ class ExamScheduleService {
             $attributes['state'] = STATE_ACTIVE;
             $attributes['created_by_id'] = Auth::id();
 
+            // Inside the transaction, before the write: the guard's locking read
+            // only holds the slot for as long as this transaction does.
+            $conflict = ScheduleConflictGuard::examSchedule($attributes);
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
             $schedule = ExamSchedule::create($attributes);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
@@ -112,6 +121,18 @@ class ExamScheduleService {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
             $schedule->fill($this->buildAttributes($offering, $data));
+
+            // Only a live row was ever policed by the EXCLUDE constraints, and
+            // the sitting being moved must not clash with itself.
+            $conflict = (int) $schedule->state === STATE_ACTIVE
+                ? ScheduleConflictGuard::examSchedule($schedule->getAttributes(), $schedule->id)
+                : null;
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
             $schedule->save();
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

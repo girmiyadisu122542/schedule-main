@@ -106,7 +106,7 @@ class CourseOfferingController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->whereHas('course', fn ($query) => $query->where('code', 'ilike', "%{$search}%"))
+                            ->whereHas('course', fn ($query) => $query->where('code', 'like', "%{$search}%"))
                             // AND, not OR, INSIDE the whereHas callback. The
                             // third argument to `jsonbLangValueSearch` emits
                             // `orWhereRaw`, which here ORs against the
