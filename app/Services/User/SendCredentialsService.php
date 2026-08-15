@@ -13,15 +13,25 @@ class SendCredentialsService {
     }
 
     /**
-     * Send login credentials (email + password) to a newly created user.
+     * Send login credentials to a newly created user.
      *
-     * @param array $credentials
-     * @param string|null $language
-     * @param int $method
+     * The password here is the one-time plaintext the account was created with;
+     * it is hashed on the user row and exists nowhere else, so this message is
+     * the only copy. A failure returns `false` rather than throwing — a mail
+     * that did not send is not a reason to roll back the account it belongs to,
+     * and the caller can offer to resend.
+     *
+     * `$method` comes before `$language` because it is required. The original
+     * ordering — an optional `$language` ahead of a required `$method` — is a
+     * PHP 8 deprecation, and made the parameter implicitly required anyway.
+     *
+     * @param array $credentials name, email, phone, password
+     * @param int $method an OtpMethod constant
+     * @param string|null $language recipient language key
      *
      * @return bool
      */
-    public function send(array $credentials, ?string $language = null, int $method): bool {
+    public function send(array $credentials, int $method = OtpMethod::EMAIL, ?string $language = null): bool {
         $recipient = $method === OtpMethod::EMAIL
             ? ['email' => $credentials['email'] ?? null]
             : ['phone' => $credentials['phone'] ?? null];

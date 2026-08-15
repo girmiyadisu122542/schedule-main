@@ -609,6 +609,8 @@ class Amharic extends Lang {
             'user' => [
                 'phone.required' => 'እባክዎ የስልክ ቁጥር ያስገቡ',
                 'phone.unique' => 'ይህ የስልክ ቁጥር ቀደም ብሎ ተወስዷል',
+                'phone.regex' => 'የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፣ ለምሳሌ 0912345678',
+                'phone.max' => 'የስልክ ቁጥር ከ' . MAX_PHONE_LENGTH . ' ቁምፊዎች መብለጥ አይችልም',
 
                 'national_id.required' => 'ብሔራዊ መታወቂያ (National ID) ግዴታ ነው',
                 'national_id.digits' => 'ብሔራዊ መታወቂያው በትክክል ' . NATIONAL_ID_LENGTH . ' አሃዞች መሆን አለበት',
@@ -899,6 +901,12 @@ class Amharic extends Lang {
             'import_offering_outside_your_scope' => 'ያ አቅርቦት ከእርስዎ ወሰን ውጪ ባለ ዲፓርትመንት ስር ነው።',
             'import_offering_is_locked' => 'ይህ አቅርቦት አስቀድሞ በማጽደቅ ሂደት ውስጥ ስለሆነ በማስመጣት ሊቀየር አይችልም።',
             'import_additional_section_not_found' => 'ከተጨማሪ ክፍሎቹ አንዱ የለም። PROGRAM|YEAR|LABEL ይጠቀሙ፣ ለምሳሌ BSC-CS|2|B።',
+
+
+            /** Transactional email — subjects and the shared footer. */
+            'email_subject_user_credentials' => 'የ{{app}} መለያዎ',
+            'email_subject_otp' => 'የ{{app}} የማረጋገጫ ኮድ',
+            'email_footer_note' => 'ይህ ከ{{app}} በራስ-ሰር የተላከ መልእክት ነው። እባክዎ አይመልሱለት።',
 
         ];
     }

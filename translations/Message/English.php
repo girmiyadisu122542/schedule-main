@@ -654,6 +654,8 @@ class English extends Lang {
             'user' => [
                 'phone.required' => 'Please enter phone number',
                 'phone.unique' => 'Phone number has already been taken',
+                'phone.regex' => 'Enter an Ethiopian mobile number, for example 0912345678',
+                'phone.max' => 'Phone number can not be more than ' . MAX_PHONE_LENGTH . ' characters',
 
                 'national_id.required' => 'National ID is required',
                 'national_id.digits' => 'National ID must be exactly ' . NATIONAL_ID_LENGTH . ' digits',
@@ -939,6 +941,12 @@ class English extends Lang {
             'import_offering_outside_your_scope' => 'That offering belongs to a department outside your scope.',
             'import_offering_is_locked' => 'This offering is already in the approval chain and cannot be changed by import.',
             'import_additional_section_not_found' => 'One of the cross-listed sections does not exist. Use PROGRAM|YEAR|LABEL, e.g. BSC-CS|2|B.',
+
+
+            /** Transactional email — subjects and the shared footer. */
+            'email_subject_user_credentials' => 'Your {{app}} account',
+            'email_subject_otp' => 'Your {{app}} verification code',
+            'email_footer_note' => 'This is an automated message from {{app}}. Please do not reply to it.',
 
         ];
     }

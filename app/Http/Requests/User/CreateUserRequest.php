@@ -7,6 +7,7 @@ use App\Models\User\UserDetail;
 use Helper\Permission\PermissionAction;
 use Helper\Rule\CustomRuleFormRequest;
 use Helper\Type\Gender\Gender;
+use Helper\Validation\Phone;
 use Illuminate\Foundation\Http\FormRequest;
 use Translation\Message;
 
@@ -18,6 +19,34 @@ class CreateUserRequest extends FormRequest {
      */
     public function authorize(): bool {
         return $this->userCanCreateUser();
+    }
+
+    /**
+     * Normalize the two fields whose wire form does not match their rule.
+     *
+     * @return void
+     */
+    protected function prepareForValidation(): void {
+        $attributes = [];
+
+        // The form is sent as multipart/form-data, which has no null: an
+        // untouched optional input arrives as the empty string. `sometimes` then
+        // reads the key as present and `digits:16` rejects it — so a user who
+        // simply has no national ID could not be created at all. Restored to the
+        // absent value the rules expect.
+        if ($this->has('national_id') && trim((string) $this->input('national_id')) === '') {
+            $attributes['national_id'] = null;
+        }
+
+        // Collapses the three accepted spellings to one before `unique` runs;
+        // see Phone::normalize().
+        if ($this->filled('phone')) {
+            $attributes['phone'] = Phone::normalize((string) $this->input('phone'));
+        }
+
+        if ($attributes !== []) {
+            $this->merge($attributes);
+        }
     }
 
     /**
@@ -38,8 +67,13 @@ class CreateUserRequest extends FormRequest {
         return [
             'id' => ['nullable', 'integer', User::exists('id')],
             'gender' => ['required', Gender::ruleIn()],
+            // `nullable` so a user with no national ID on file can still be
+            // created; the digit rules only apply once a value is actually
+            // given. Whether it is required at all is the deployment's call,
+            // carried by NATIONAL_ID_IS_GLOBALLY_MANDATORY inside
+            // nationalIdValidation().
             'national_id' => [
-                'string',
+                'nullable',
                 UserDetail::unique('national_id', $ignoreDetailId),
                 ...nationalIdValidation(),
             ],

@@ -31,6 +31,44 @@ class Phone {
     }
 
     /**
+     * Reduce a number to the single spelling this system stores.
+     *
+     * The pattern above accepts `+251…`, `251…` and `0…` for the same
+     * subscriber, so without this the `unique` rules compare spellings rather
+     * than numbers: `0912345678` and `+251912345678` are the same phone and
+     * both would be accepted as two separate accounts. Every stored number is
+     * normalized to the local `0…` form — the spelling the seeded users already
+     * use, so no existing row has to move.
+     *
+     * Formatting is dropped too, which makes `+251 91 234 5678` valid input
+     * rather than a "format is invalid" the user cannot see the reason for.
+     *
+     * A number this does not recognise is returned digits-only and left to fail
+     * the pattern — normalizing must never turn an invalid number into a valid
+     * one.
+     *
+     * @param string $phone
+     * @return string
+     */
+    public static function normalize(string $phone): string {
+        $digits = static::clean($phone);
+
+        if ($digits === '') {
+            return $phone;
+        }
+
+        if (str_starts_with($digits, '251')) {
+            $digits = substr($digits, 3);
+        }
+
+        if (!str_starts_with($digits, '0')) {
+            $digits = '0' . $digits;
+        }
+
+        return $digits;
+    }
+
+    /**
      * Validate if phone number matches Ethiopian format
      *
      * @param string $phone

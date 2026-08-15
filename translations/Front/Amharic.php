@@ -3195,6 +3195,16 @@ class Amharic extends Lang {
             'noMeetingsHere' => 'እዚህ የተያዘ ክፍለ ጊዜ የለም።',
             'reports' => 'ሪፖርቶች',
             'importOrderOfferings' => 'አቅርቦቶች በሴሚስተር፣ ኮርስ፣ ዲፓርትመንት፣ ፕሮግራም፣ ክፍል እና መምህር ላይ ይመሠረታሉ — መጀመሪያ እነሱን ያስገቡ።',
+
+            /** User form — client-side validation messages. */
+            'nameInvalid' => 'ስም ቁጥሮችን መያዝ አይችልም',
+            'nameTooShort' => 'ስም ቢያንስ 2 ቁምፊዎች መሆን አለበት',
+            'phoneInvalid' => 'የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፣ ለምሳሌ 0912345678',
+            'nationalIdLength' => 'የመታወቂያ ቁጥር በትክክል 16 አሃዞች መሆን አለበት',
+            'nationalIdOptional' => 'የመታወቂያ ቁጥር (አማራጭ)',
+            'pleaseFixHighlightedFields' => 'እባክዎ የተመለከቱትን መስኮች አስተካክለው እንደገና ይሞክሩ',
+
+            'unableToLoadProfile' => 'መገለጫዎን መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ።',
         ];
     }
 }

@@ -58,6 +58,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend URL
+    |--------------------------------------------------------------------------
+    |
+    | Where the single-page app lives. `url` above is this API, which is a
+    | different origin — a "Sign in" link in an email has to point at the SPA,
+    | not at a JSON endpoint. Left null when unset so the templates can drop the
+    | button rather than render a broken link.
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

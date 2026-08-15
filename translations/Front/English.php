@@ -3194,6 +3194,23 @@ class English extends Lang {
             'noMeetingsHere' => 'Nothing scheduled here yet.',
             'reports' => 'Reports',
             'importOrderOfferings' => 'Offerings depend on semesters, courses, departments, programs, sections and instructors — import those first.',
+
+            /** User form — client-side validation messages. */
+            'nameInvalid' => 'Name cannot contain numbers',
+            'firstNameRequired' => 'First Name is required',
+            'middleNameRequired' => 'Middle Name is required',
+            'lastNameRequired' => 'Last Name is required',
+            'nameTooShort' => 'Name must be at least 2 characters',
+            'phoneRequired' => 'Phone number is required',
+            'phoneInvalid' => 'Enter an Ethiopian mobile number, for example 0912345678',
+            'emailRequired' => 'Email is required',
+            'emailInvalid' => 'Invalid email address',
+            'genderRequired' => 'Gender is required',
+            'nationalIdLength' => 'National ID must be exactly 16 digits',
+            'nationalIdOptional' => 'National ID (Optional)',
+            'pleaseFixHighlightedFields' => 'Please correct the highlighted fields and retry',
+
+            'unableToLoadProfile' => 'Unable to load your profile. Please retry.',
         ];
     }
 }
