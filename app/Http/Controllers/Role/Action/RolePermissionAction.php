@@ -173,6 +173,14 @@ trait RolePermissionAction {
             ->where('role_id', $role->id)
             ->delete();
 
+        // Required because the delete above runs on the query builder, which
+        // does NOT fire RolePermission's `deleted` hook — so nothing else
+        // refreshes the permission cache. Without it the row is gone while
+        // every holder of the role keeps the permission indefinitely: a revoked
+        // permission that is still enforced as granted. `addPermissions` and
+        // `setPermissions` already call this for the same reason.
+        PermissionCacheHandler::updateCache();
+
         $bindings = ['name' => $role->name__localized];
         return Response::_200([
             'message' => Message::get('permissions_successfully_removed_from_role', $bindings),

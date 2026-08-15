@@ -24,13 +24,13 @@ use App\Http\Controllers\Lookup\LookupValueController;
 use App\Http\Controllers\Permission\PermissionController;
 use App\Http\Controllers\Permission\PermissionGroupController;
 use App\Http\Controllers\Program\ProgramController;
+use App\Http\Controllers\Report\ScheduleReportController;
 use App\Http\Controllers\Role\RoleController;
 use App\Http\Controllers\Room\RoomController;
 use App\Http\Controllers\Schedule\ClassScheduleController;
 use App\Http\Controllers\Schedule\ClassScheduleGeneratorController;
 use App\Http\Controllers\Schedule\ExamScheduleController;
 use App\Http\Controllers\Schedule\ExamScheduleGeneratorController;
-use App\Http\Controllers\Report\ScheduleReportController;
 use App\Http\Controllers\Schedule\ScheduleGenerationRunController;
 use App\Http\Controllers\Schedule\ScheduleSettingController;
 use App\Http\Controllers\Section\SectionController;
@@ -285,11 +285,21 @@ Route::middleware(API_GUARD_MIDDLEWARE)
         // Offering & approval. A workflow table: no /{id}/state route — the
         // status moves through submit and the approval trail, both guarded by
         // lookup_transitions (Final Schema.md Sec. 12).
+        // Import / export + the queue summary. Declared BEFORE the apiResource:
+        // its {id} placeholder matches [A-Za-z0-9-]+ and would otherwise
+        // swallow these as show() with id = "export".
+        Route::get('/offerings/export', [CourseOfferingController::class, 'export']);
+        Route::get('/offerings/import-template', [CourseOfferingController::class, 'importTemplate']);
+        Route::post('/offerings/import', [CourseOfferingController::class, 'import']);
+        Route::get('/offerings/summary', [CourseOfferingController::class, 'summary']);
+
         Route::apiResource('/offerings', CourseOfferingController::class)
             ->parameters(['offerings' => 'id'])
             ->where(['id' => '[A-Za-z0-9-]+']);
         Route::post('/offerings/{id}/submit', [CourseOfferingController::class, 'submit']);
-        Route::post('/offerings/{id}/change-status', [CourseOfferingController::class, 'changeStatus']);
+        // Replaces the old generic change-status, which accepted any target and
+        // wrote no trail row. This one takes no target: `rejected → draft` only.
+        Route::post('/offerings/{id}/reopen', [CourseOfferingController::class, 'reopen']);
         // The four-tier trail: one append-only row per decision, which also
         // moves the offering's status (Final Schema.md Sec. 13).
         Route::post('/offerings/{id}/approval', [CourseOfferingController::class, 'recordApproval']);

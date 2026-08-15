@@ -209,17 +209,53 @@ define('PERMISSION_IMPORT_INSTRUCTOR', 'import:instructor');
 
 /**
  * Course Offering Related — the four-tier approval workflow.
- *
- * `approve` and `reject` gate the trail-recording endpoint (step 10); which
- * TIER a user may act as is decided by their role, not by a separate key.
  */
 define('PERMISSION_SEE_COURSE_OFFERING', 'see:course:offering');
 define('PERMISSION_CREATE_COURSE_OFFERING', 'create:course:offering');
 define('PERMISSION_UPDATE_COURSE_OFFERING', 'update:course:offering');
 define('PERMISSION_DELETE_COURSE_OFFERING', 'delete:course:offering');
 define('PERMISSION_SUBMIT_COURSE_OFFERING', 'submit:course:offering');
-define('PERMISSION_APPROVE_COURSE_OFFERING', 'approve:course:offering');
 define('PERMISSION_REJECT_COURSE_OFFERING', 'reject:course:offering');
+/**
+ * Putting a REJECTED offering back in its author's hands.
+ *
+ * Its own key because it is the one status move that is not a tier decision,
+ * and it undoes one — a registrar's correction, not a step in the chain.
+ */
+define('PERMISSION_REOPEN_COURSE_OFFERING', 'reopen:course:offering');
+define('PERMISSION_EXPORT_COURSE_OFFERING', 'export:course:offering');
+define('PERMISSION_IMPORT_COURSE_OFFERING', 'import:course:offering');
+
+/**
+ * One key per approval TIER.
+ *
+ * There is deliberately no coarse `approve:course:offering`. With a single key
+ * the tier had to come from the request, and a holder could name any tier they
+ * liked — a department head could post `level = registrar` on a college-approved
+ * offering and grant final approval, putting it straight into the generators.
+ *
+ * The service now derives the DUE tier from the offering's current status and
+ * demands that tier's key, so the caller no longer has a say in which tier they
+ * are acting as. Scope (`DepartmentScopeService`) then decides WHOSE offering
+ * they may act on; these keys decide only WHICH tier.
+ */
+define('PERMISSION_APPROVE_COURSE_OFFERING_COMMITTEE', 'approve:course:offering:committee');
+define('PERMISSION_APPROVE_COURSE_OFFERING_DEPARTMENT', 'approve:course:offering:department');
+define('PERMISSION_APPROVE_COURSE_OFFERING_COLLEGE', 'approve:course:offering:college');
+define('PERMISSION_APPROVE_COURSE_OFFERING_REGISTRAR', 'approve:course:offering:registrar');
+
+/**
+ * The APPROVAL_LEVEL code → permission key map, so a tier is never spelled as a
+ * string anywhere else.
+ *
+ * @var array<string, string>
+ */
+define('PERMISSION_BY_APPROVAL_LEVEL', [
+    APPROVAL_LEVEL_COMMITTEE => PERMISSION_APPROVE_COURSE_OFFERING_COMMITTEE,
+    APPROVAL_LEVEL_DEPARTMENT => PERMISSION_APPROVE_COURSE_OFFERING_DEPARTMENT,
+    APPROVAL_LEVEL_COLLEGE => PERMISSION_APPROVE_COURSE_OFFERING_COLLEGE,
+    APPROVAL_LEVEL_REGISTRAR => PERMISSION_APPROVE_COURSE_OFFERING_REGISTRAR,
+]);
 
 /**
  * The cross-department view.

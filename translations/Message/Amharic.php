@@ -609,6 +609,8 @@ class Amharic extends Lang {
             'user' => [
                 'phone.required' => 'እባክዎ የስልክ ቁጥር ያስገቡ',
                 'phone.unique' => 'ይህ የስልክ ቁጥር ቀደም ብሎ ተወስዷል',
+                'phone.regex' => 'የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፣ ለምሳሌ 0912345678',
+                'phone.max' => 'የስልክ ቁጥር ከ' . MAX_PHONE_LENGTH . ' ቁምፊዎች መብለጥ አይችልም',
 
                 'national_id.required' => 'ብሔራዊ መታወቂያ (National ID) ግዴታ ነው',
                 'national_id.digits' => 'ብሔራዊ መታወቂያው በትክክል ' . NATIONAL_ID_LENGTH . ' አሃዞች መሆን አለበት',
@@ -882,6 +884,29 @@ class Amharic extends Lang {
             'unable_to_import_file' => 'ፋይሉን ማስገባት አልተቻለም',
             'yes' => 'አዎ',
             'no' => 'አይ',
+
+
+            /**
+             * Course-offering approval chain — the tier-derivation rework.
+             */
+            'offering_is_not_awaiting_a_decision' => 'ይህ አቅርቦት አሁን ውሳኔ እየጠበቀ አይደለም።',
+            'not_your_tier_to_decide' => 'ይህ አቅርቦት ባለበት ደረጃ የእርስዎ የመወሰን ኃላፊነት አይደለም።',
+            'you_already_acted_on_this_offering' => 'ቀዳሚውን ውሳኔ በዚህ አቅርቦት ላይ እርስዎ ወስነዋል — ቀጣዩን ሌላ ሰው መወሰን አለበት።',
+            'only_a_rejected_offering_can_be_reopened' => 'ተቀባይነት ያላገኘ አቅርቦት ብቻ እንደገና ሊከፈት ይችላል።',
+            'course_offering_reopened_successfully' => '{{name}} እንደ ረቂቅ እንደገና ተከፍቷል።',
+
+            'course_offering_already_exists_for_this_cohort' => 'ይህ ኮርስ በዚህ ሴሚስተር ለዚያ ክፍል አስቀድሞ ቀርቧል።',
+
+            'import_department_outside_your_scope' => 'ያ ዲፓርትመንት እርስዎ አቅርቦት ማስገባት ከሚችሉት ውጪ ነው።',
+            'import_offering_outside_your_scope' => 'ያ አቅርቦት ከእርስዎ ወሰን ውጪ ባለ ዲፓርትመንት ስር ነው።',
+            'import_offering_is_locked' => 'ይህ አቅርቦት አስቀድሞ በማጽደቅ ሂደት ውስጥ ስለሆነ በማስመጣት ሊቀየር አይችልም።',
+            'import_additional_section_not_found' => 'ከተጨማሪ ክፍሎቹ አንዱ የለም። PROGRAM|YEAR|LABEL ይጠቀሙ፣ ለምሳሌ BSC-CS|2|B።',
+
+
+            /** Transactional email — subjects and the shared footer. */
+            'email_subject_user_credentials' => 'የ{{app}} መለያዎ',
+            'email_subject_otp' => 'የ{{app}} የማረጋገጫ ኮድ',
+            'email_footer_note' => 'ይህ ከ{{app}} በራስ-ሰር የተላከ መልእክት ነው። እባክዎ አይመልሱለት።',
 
         ];
     }

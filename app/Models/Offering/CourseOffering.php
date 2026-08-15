@@ -12,6 +12,7 @@ use App\Models\People\Instructor;
 use App\Models\Schedule\ClassSchedule;
 use App\Models\Schedule\ExamSchedule;
 use App\Models\User;
+use App\Services\Offering\OfferingApprovalService;
 use Helper\Field\Field;
 use Helper\Model\ScopedModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -222,6 +223,11 @@ class CourseOffering extends ScopedModel {
             Field::remark(),
             // The status chip reads `status_code` + the lookup's own colour.
             Field::statusCode('status.code'),
+            // The tier due to decide, computed by the same rule the approval
+            // service enforces. The frontend must NOT re-derive it — a second
+            // copy of the state machine in TypeScript is a second place for it
+            // to drift.
+            Field::make('awaiting_level_code', fn ($data) => OfferingApprovalService::dueLevelForStatus($data->status?->code)),
             Field::makeResource('status', fields: 'idAndNameFields'),
             Field::makeResource('semester', fields: 'idAndNameFields'),
             Field::makeResource('course', fields: 'idAndNameFields'),

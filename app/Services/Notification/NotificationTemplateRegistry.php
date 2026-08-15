@@ -2,13 +2,22 @@
 
 namespace App\Services\Notification;
 
-use Common\Lang\BackLang;
 use InvalidArgumentException;
+use Translation\Message;
 
+/**
+ * Reads `config/notification_registry.php`.
+ *
+ * Trimmed when notifications moved from the external service to Laravel mail:
+ * the per-locale, per-channel template-NAME lookup it used to do belonged to a
+ * service that stored its own templates. A Blade view renders both languages
+ * itself, so what survives is the part that was always this application's job —
+ * validating that a template has the data it needs before anything is sent.
+ */
 class NotificationTemplateRegistry {
 
     /**
-     * Returns the entire notification template registry.
+     * The entire registry.
      *
      * @return array
      */
@@ -16,6 +25,14 @@ class NotificationTemplateRegistry {
         return config('notification_registry', []);
     }
 
+    /**
+     * One template definition.
+     *
+     * @param string $key
+     * @return array
+     *
+     * @throws \InvalidArgumentException
+     */
     public function get(string $key): array {
         $templates = $this->all();
         $normalizedKey = strtolower($key);
@@ -28,44 +45,17 @@ class NotificationTemplateRegistry {
     }
 
     /**
-     * Resolve the notification template to use for the given channels.
-     * Resolves the notification template to use for the given channels, based on the language provided.
-     * If no templates are found for the requested channels, an InvalidArgumentException will be thrown.
+     * Refuse to send a template that is missing data it declares it needs.
      *
-     * @param string $key
-     * @param array $channels
-     * @param string|null $language
-     *
-     * @return array
-     * @throws InvalidArgumentException
-     */
-    public function resolveChannelTemplates(string $key, array $channels, ?string $language = null): array {
-        $definition = $this->get($key);
-        $templates = $this->resolveLocaleTemplates($definition, $language);
-
-        $resolved = [];
-        foreach ($channels as $channel) {
-            if (!empty($templates[$channel])) {
-                $resolved[$channel] = $templates[$channel];
-            }
-        }
-
-        if ($resolved === []) {
-            throw new InvalidArgumentException("Notification template [{$key}] has no templates for the requested channels.");
-        }
-
-        return $resolved;
-    }
-
-    /**
-     * Validates the given notification template data against the registered required data.
-     * If any required data is missing, an InvalidArgumentException will be thrown.
+     * A mail rendered with a hole in it is discovered by the recipient, which is
+     * the worst possible place to find out — so this runs before the send, not
+     * inside the view.
      *
      * @param string $key
      * @param array $data
      *
      * @return void
-     * @throws InvalidArgumentException
+     * @throws \InvalidArgumentException
      */
     public function validateRequiredData(string $key, array $data): void {
         $definition = $this->get($key);
@@ -84,41 +74,25 @@ class NotificationTemplateRegistry {
     }
 
     /**
-     * Resolves the notification template locale templates based on the given language key.
-     * The function will return the first available template for the given language key,
-     * otherwise it will return the English language templates.
-     * If no templates are found, an InvalidArgumentException will be thrown.
+     * The language a notification should be written in.
      *
-     * @param array $definition
-     * @param string|null $language
+     * Falls back through: the language the caller named → the language of the
+     * request in flight → the application locale → English. A notification is
+     * often sent from a queue or a console command where there is no request, so
+     * the last two steps are load-bearing rather than defensive.
      *
-     * @return array
-     * @throws InvalidArgumentException
-     */
-    private function resolveLocaleTemplates(array $definition, ?string $language = null): array {
-        $locale = $this->resolveLanguageKey($language);
-
-        foreach ([$locale, ENGLISH_LANG_KEY] as $languageKey) {
-            $templates = $definition[$languageKey] ?? null;
-            if (is_array($templates)) {
-                return $templates;
-            }
-        }
-
-        throw new InvalidArgumentException('Notification template is missing locale definitions.');
-    }
-
-    /**
-     * Resolve the language key based on the given language key,
-     * the current request, the application locale, or the English language key as a fallback.
+     * The available keys come from `Translation\Message`, NOT from `BackLang`:
+     * `$langs` is declared on the subclass, so asking the base class yields an
+     * empty list and every language argument silently falls through to the
+     * default — which is what made `--lang=am` render English.
      *
      * @param string|null $language
      * @return string
      */
-    private function resolveLanguageKey(?string $language = null): string {
+    public function languageKeyFor(?string $language = null): string {
         $language = is_string($language) ? strtolower(trim($language)) : '';
 
-        if ($language !== '' && in_array($language, BackLang::getAvailableLangKeys(), true)) {
+        if ($language !== '' && in_array($language, Message::getAvailableLangKeys(), true)) {
             return $language;
         }
 
@@ -131,6 +105,34 @@ class NotificationTemplateRegistry {
 
         $appLocale = strtolower((string) app()->getLocale());
 
-        return in_array($appLocale, BackLang::getAvailableLangKeys(), true) ? $appLocale : ENGLISH_LANG_KEY;
+        return in_array($appLocale, Message::getAvailableLangKeys(), true) ? $appLocale : ENGLISH_LANG_KEY;
+    }
+
+    /**
+     * A Message translation rendered in a NAMED language.
+     *
+     * `Message::get()` resolves the language from the `lang` request header and
+     * returns the default in console — so a recipient whose language was passed
+     * in would get an Amharic body under an English subject, and a queued or
+     * command-line send would always be English. This reads the language's
+     * bucket directly instead.
+     *
+     * @param string $key
+     * @param string $languageKey
+     * @param array $bindings
+     *
+     * @return string|null
+     */
+    public function translateIn(string $key, string $languageKey, array $bindings = []): ?string {
+        $translations = Message::getAllTranslations($languageKey);
+        $translation = $translations[$key] ?? null;
+
+        if (!is_string($translation) || $translation === '') {
+            return null;
+        }
+
+        return $bindings === []
+            ? $translation
+            : Message::parseBindings($translation, $bindings, '{{$key}}');
     }
 }

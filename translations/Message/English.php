@@ -654,6 +654,8 @@ class English extends Lang {
             'user' => [
                 'phone.required' => 'Please enter phone number',
                 'phone.unique' => 'Phone number has already been taken',
+                'phone.regex' => 'Enter an Ethiopian mobile number, for example 0912345678',
+                'phone.max' => 'Phone number can not be more than ' . MAX_PHONE_LENGTH . ' characters',
 
                 'national_id.required' => 'National ID is required',
                 'national_id.digits' => 'National ID must be exactly ' . NATIONAL_ID_LENGTH . ' digits',
@@ -922,6 +924,29 @@ class English extends Lang {
             'unable_to_import_file' => 'Unable to import that file',
             'yes' => 'Yes',
             'no' => 'No',
+
+
+            /**
+             * Course-offering approval chain — the tier-derivation rework.
+             */
+            'offering_is_not_awaiting_a_decision' => 'This offering is not waiting on a decision right now.',
+            'not_your_tier_to_decide' => 'This offering is not yours to decide at its current stage.',
+            'you_already_acted_on_this_offering' => 'You took the previous decision on this offering — someone else has to take the next one.',
+            'only_a_rejected_offering_can_be_reopened' => 'Only a rejected offering can be reopened.',
+            'course_offering_reopened_successfully' => '{{name}} has been reopened as a draft.',
+
+            'course_offering_already_exists_for_this_cohort' => 'This course is already offered to that cohort in this semester.',
+
+            'import_department_outside_your_scope' => 'That department is outside the departments you may file offerings for.',
+            'import_offering_outside_your_scope' => 'That offering belongs to a department outside your scope.',
+            'import_offering_is_locked' => 'This offering is already in the approval chain and cannot be changed by import.',
+            'import_additional_section_not_found' => 'One of the cross-listed sections does not exist. Use PROGRAM|YEAR|LABEL, e.g. BSC-CS|2|B.',
+
+
+            /** Transactional email — subjects and the shared footer. */
+            'email_subject_user_credentials' => 'Your {{app}} account',
+            'email_subject_otp' => 'Your {{app}} verification code',
+            'email_footer_note' => 'This is an automated message from {{app}}. Please do not reply to it.',
 
         ];
     }

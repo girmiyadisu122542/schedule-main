@@ -69,6 +69,29 @@ class Column {
     public ?Closure $exportUsing = null;
 
     /**
+     * Batched resolver for a cell whose target has no single stable column.
+     *
+     * `semesters` are identified by `(academic_year, term)` and `sections` by
+     * `(program, year_level, label)` — neither has a `code` a plain
+     * {@see self::resolvesTo()} could match on. Receives every distinct value in
+     * the file at once and returns `[loweredValue => id]`, so it stays one query
+     * per column rather than one per row.
+     *
+     * @var \Closure|null
+     */
+    public ?Closure $resolver = null;
+
+    /**
+     * Written on export, ignored on import.
+     *
+     * For columns worth reading in a download but not worth trusting in an
+     * upload — an offering's `status`, most of all: a status column the importer
+     * honoured would be a spreadsheet route to `registrar_approved` with no
+     * approvals and no trail.
+     */
+    public bool $exportOnly = false;
+
+    /**
      * @param string $key machine header key
      * @param string|null $attribute model attribute written; defaults to $key
      */
@@ -149,6 +172,29 @@ class Column {
      */
     public function resolvesToLookup(string $lookupType): self {
         $this->lookupType = $lookupType;
+
+        return $this;
+    }
+
+    /**
+     * Resolve this cell with a batched closure — see {@see self::$resolver}.
+     *
+     * @param \Closure $resolver receives array<string, string> lowered => original
+     * @return self
+     */
+    public function resolvesUsing(Closure $resolver): self {
+        $this->resolver = $resolver;
+
+        return $this;
+    }
+
+    /**
+     * Mark the column readable but not writable.
+     *
+     * @return self
+     */
+    public function exportOnly(): self {
+        $this->exportOnly = true;
 
         return $this;
     }

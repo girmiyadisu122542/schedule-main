@@ -90,6 +90,16 @@ define('COURSE_OFFERING_STATUS_COMMITTEE_APPROVED', 'committee_approved');
 define('COURSE_OFFERING_STATUS_DEPARTMENT_APPROVED', 'department_approved');
 define('COURSE_OFFERING_STATUS_COLLEGE_APPROVED', 'college_approved');
 define('COURSE_OFFERING_STATUS_REGISTRAR_APPROVED', 'registrar_approved');
+/**
+ * Sent back for rework, as distinct from `rejected` (declined outright).
+ *
+ * A returned offering is the author's again: editable, and resubmittable
+ * without an approval permission. Collapsing the two, as this workflow did
+ * originally, meant a list could not tell "fix a typo" from "we are not running
+ * this course", and left the author with no way back — `rejected` had no edge to
+ * `submitted`, and its only escape needed a permission the author lacks.
+ */
+define('COURSE_OFFERING_STATUS_RETURNED', 'returned');
 define('COURSE_OFFERING_STATUS_REJECTED', 'rejected');
 
 define('APPROVAL_LEVEL', 'APPROVAL_LEVEL');

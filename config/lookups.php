@@ -196,21 +196,38 @@ return [
             ['name' => ['en' => 'Department Approved', 'am' => 'በዲፓርትመንት ጸድቋል'], 'code' => COURSE_OFFERING_STATUS_DEPARTMENT_APPROVED, 'order' => 4, 'color' => '#22D3EE', 'icon' => 'check'],
             ['name' => ['en' => 'College Approved', 'am' => 'በኮሌጅ ጸድቋል'], 'code' => COURSE_OFFERING_STATUS_COLLEGE_APPROVED, 'order' => 5, 'color' => '#34D399', 'icon' => 'check'],
             ['name' => ['en' => 'Registrar Approved', 'am' => 'በሬጅስትራር ጸድቋል'], 'code' => COURSE_OFFERING_STATUS_REGISTRAR_APPROVED, 'order' => 6, 'color' => '#10B981', 'icon' => 'check-circle'],
-            ['name' => ['en' => 'Rejected', 'am' => 'ተቀባይነት አላገኘም'], 'code' => COURSE_OFFERING_STATUS_REJECTED, 'order' => 7, 'color' => '#EF4444', 'icon' => 'x-circle'],
+            ['name' => ['en' => 'Returned', 'am' => 'ተመልሷል'], 'code' => COURSE_OFFERING_STATUS_RETURNED, 'order' => 7, 'color' => '#F59E0B', 'icon' => 'arrow-uturn-left'],
+            ['name' => ['en' => 'Rejected', 'am' => 'ተቀባይነት አላገኘም'], 'code' => COURSE_OFFERING_STATUS_REJECTED, 'order' => 8, 'color' => '#EF4444', 'icon' => 'x-circle'],
         ],
         'transitions' => [
+            // The forward chain. Every hop is one tier, which is what makes a
+            // skipped tier impossible: there is no edge that spans two.
             ['from' => COURSE_OFFERING_STATUS_DRAFT, 'to' => COURSE_OFFERING_STATUS_SUBMITTED],
             ['from' => COURSE_OFFERING_STATUS_SUBMITTED, 'to' => COURSE_OFFERING_STATUS_COMMITTEE_APPROVED],
             ['from' => COURSE_OFFERING_STATUS_COMMITTEE_APPROVED, 'to' => COURSE_OFFERING_STATUS_DEPARTMENT_APPROVED],
             ['from' => COURSE_OFFERING_STATUS_DEPARTMENT_APPROVED, 'to' => COURSE_OFFERING_STATUS_COLLEGE_APPROVED],
             ['from' => COURSE_OFFERING_STATUS_COLLEGE_APPROVED, 'to' => COURSE_OFFERING_STATUS_REGISTRAR_APPROVED],
 
-            // Any tier may reject, and a rejection can be reworked into a new draft.
+            // The rework loop. A returned offering goes back to its author, who
+            // edits it and resubmits — no approval permission involved, which is
+            // the whole point of separating `returned` from `rejected`.
+            ['from' => COURSE_OFFERING_STATUS_RETURNED, 'to' => COURSE_OFFERING_STATUS_SUBMITTED],
+            ['from' => COURSE_OFFERING_STATUS_SUBMITTED, 'to' => COURSE_OFFERING_STATUS_RETURNED],
+            ['from' => COURSE_OFFERING_STATUS_COMMITTEE_APPROVED, 'to' => COURSE_OFFERING_STATUS_RETURNED],
+            ['from' => COURSE_OFFERING_STATUS_DEPARTMENT_APPROVED, 'to' => COURSE_OFFERING_STATUS_RETURNED],
+            ['from' => COURSE_OFFERING_STATUS_COLLEGE_APPROVED, 'to' => COURSE_OFFERING_STATUS_RETURNED],
+
+            // A hard decline, from any reviewing tier. Recoverable only by
+            // reworking it into a new draft.
             ['from' => COURSE_OFFERING_STATUS_SUBMITTED, 'to' => COURSE_OFFERING_STATUS_REJECTED],
             ['from' => COURSE_OFFERING_STATUS_COMMITTEE_APPROVED, 'to' => COURSE_OFFERING_STATUS_REJECTED],
             ['from' => COURSE_OFFERING_STATUS_DEPARTMENT_APPROVED, 'to' => COURSE_OFFERING_STATUS_REJECTED],
             ['from' => COURSE_OFFERING_STATUS_COLLEGE_APPROVED, 'to' => COURSE_OFFERING_STATUS_REJECTED],
             ['from' => COURSE_OFFERING_STATUS_REJECTED, 'to' => COURSE_OFFERING_STATUS_DRAFT],
+
+            // `registrar_approved` has no outgoing edge on purpose: it is the
+            // scheduling generators' input, and must not move under a timetable
+            // that has already been built from it.
         ],
     ],
 

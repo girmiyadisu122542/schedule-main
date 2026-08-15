@@ -132,8 +132,12 @@ trait CreateUserAction {
                     'phone' => $user->phone ?? null,
                 ];
 
-               // $sendCredentialsService = app(SendCredentialsService::class);
-                //$sendCredentialsService->send($credentials, $language, OtpMethod::EMAIL);
+                // Sent AFTER the user row is saved but still inside the
+                // transaction's try — the service returns false rather than
+                // throwing, so a mail that could not be delivered never rolls
+                // back the account it belongs to. The failure is logged by
+                // `MailNotificationService`, and the account can be resent to.
+                app(SendCredentialsService::class)->send($credentials, OtpMethod::EMAIL, $language);
             }
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

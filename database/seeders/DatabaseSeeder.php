@@ -23,8 +23,9 @@ use Database\Seeders\Role\RolePermissionSeeder;
 use Database\Seeders\Role\RoleSeeder;
 use Database\Seeders\Role\UserRoleBindingSeeder;
 use Database\Seeders\Schedule\ClassScheduleSeeder;
-use Database\Seeders\Schedule\ScheduleSettingSeeder;
 use Database\Seeders\Schedule\ExamScheduleSeeder;
+use Database\Seeders\Schedule\ScheduleSettingSeeder;
+use Database\Seeders\User\OrgChartSeeder;
 use Database\Seeders\User\UserSeeder;
 use Helper\Cache\RoleCacheHandler;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -53,6 +54,10 @@ class DatabaseSeeder extends Seeder {
                 BuildingSeeder::class,
                 CollegeSeeder::class,
                 DepartmentSeeder::class,
+                // Wires head_user_id / dean_user_id, which the department scope
+                // is derived from — so it must follow both colleges and
+                // departments, and the roles it binds.
+                OrgChartSeeder::class,
                 AcademicYearSeeder::class,
                 ProgramSeeder::class,
                 SemesterSeeder::class,

@@ -24,8 +24,6 @@ define('BARCODE_GENERATED_LENGTH', 10);
 define('SENTRY_ENABLED', false);
 define('SENTRY_DSN', 'http://8aac3714fd65abb1cd7988caab77f141@196.188.247.61:9000/3');
 
-define('DEVELOPMENT_NOTIFICATION_SERVER', 'http://196.188.247.38');
-
 /** Redis related */
 define('CAN_USE_REDIS', false); // make sure you have installed redis on your machine
 define('USE_HORIZON_FOR_QUEUE', false); // enable this when you are sure you have installed redis on your machine.
@@ -340,16 +338,28 @@ define('NOTIFICATION_TEMPLATE_KEY_USER_REGISTRATION', 'user_registration');
 define('NOTIFICATION_TEMPLATE_KEY_OTP', 'otp');
 
 define('NOTIFICATION_TEMPLATE_REQUIRED_DATA_KEY', 'required_data');
-define('NOTIFICATION_TEMPLATE_EMAIL_KEY', 'email');
-define('NOTIFICATION_TEMPLATE_SMS_KEY', 'sms');
 define('ENGLISH_LANG_KEY', 'en');
 define('AMHARIC_LANG_KEY', 'am');
 
-/** Notification template names */
-define('NOTIFICATION_TEMPLATE_NAME_USER_REGISTRATION_EN', 'user_registration_en');
-define('NOTIFICATION_TEMPLATE_NAME_USER_REGISTRATION_AM', 'user_registration_am');
-define('NOTIFICATION_TEMPLATE_NAME_OTP_EN', 'otp_verification_en');
-define('NOTIFICATION_TEMPLATE_NAME_OTP_AM', 'otp_verification_am');
+/**
+ * Where a template's Blade view and its subject line come from.
+ *
+ * These replaced the external service's template NAMES. That service addressed
+ * templates it stored itself, so the app only ever sent it a name and a data
+ * bag; mail is rendered here, so the registry names a Blade view and a
+ * translation key instead.
+ */
+define('NOTIFICATION_TEMPLATE_VIEW_KEY', 'view');
+define('NOTIFICATION_TEMPLATE_SUBJECT_KEY', 'subject_key');
+
+/**
+ * The length of a Google App Password.
+ *
+ * Gmail rejects the account's normal password over SMTP and answers with the
+ * same "Username and Password not accepted" it gives a genuinely wrong one, so
+ * `schedule:test-mail` warns on a password of any other length before sending.
+ */
+define('GMAIL_APP_PASSWORD_LENGTH', 16);
 
 define('NOTIFICATION_SEND_METHOD_EMAIL', 'email');
 define('NOTIFICATION_SEND_METHOD_SMS', 'sms');

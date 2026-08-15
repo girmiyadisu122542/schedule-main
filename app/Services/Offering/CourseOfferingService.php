@@ -6,6 +6,7 @@ use App\Models\Academic\Section;
 use App\Models\Academic\Semester;
 use App\Models\Catalogue\Course;
 use App\Models\Offering\CourseOffering;
+use App\Models\Offering\CourseOfferingApproval;
 use App\Models\People\Instructor;
 use App\Services\Lookup\LookupService;
 use Constants\AppConstant;
@@ -45,6 +46,15 @@ class CourseOfferingService {
             $this->syncAdditionalSections($offering, $data);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Illuminate\Database\QueryException $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+            $duplicate = self::duplicateErrorKey($exception);
+            if ($duplicate) {
+                return $duplicate;
+            }
+
+            throw $exception;
         } catch (\Throwable $exception) {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
             throw $exception;
@@ -54,7 +64,49 @@ class CourseOfferingService {
     }
 
     /**
-     * Update a course offering. Only a draft or a rejected offering may be
+     * Map the offering uniqueness constraints onto a message the user can act
+     * on.
+     *
+     * The database is the authority on "this course is already offered to this
+     * cohort this semester" — two of them, in fact, since a section-less
+     * offering is covered by a partial unique instead. Without this the
+     * violation surfaced as a raw 500, which is the least useful possible way to
+     * say "you already entered this".
+     *
+     * Matched by PREFIX: PostgreSQL truncates identifiers at 63 characters, so
+     * the full constraint name in the message may be clipped.
+     *
+     * @param \Illuminate\Database\QueryException $exception
+     * @return string|null an error translation key, or null when it is not a duplicate
+     */
+    private static function duplicateErrorKey(\Illuminate\Database\QueryException $exception): ?string {
+        $message = $exception->getMessage();
+
+        foreach (['course_offerings_semester_id_course_id_section_id', 'course_offerings_semester_course_no_section'] as $constraint) {
+            if (str_contains($message, $constraint)) {
+                return 'course_offering_already_exists_for_this_cohort';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The statuses whose content the author may still change.
+     *
+     * A returned offering is the author's again — that is the entire point of
+     * separating it from `rejected`, which is a decision that stands until a
+     * registrar reopens it.
+     *
+     * @var array<int, string>
+     */
+    public const EDITABLE_STATUS_CODES = [
+        COURSE_OFFERING_STATUS_DRAFT,
+        COURSE_OFFERING_STATUS_RETURNED,
+    ];
+
+    /**
+     * Update a course offering. Only a draft or a returned offering may be
      * edited — once it is in the approval chain, its content is what the tiers
      * are voting on.
      *
@@ -65,8 +117,7 @@ class CourseOfferingService {
      */
     public function updateOffering(CourseOffering $offering, array $data) {
         // ---- pre-flight checks (NO writes yet) ----
-        $editableCodes = [COURSE_OFFERING_STATUS_DRAFT, COURSE_OFFERING_STATUS_REJECTED];
-        if (!in_array($offering->status?->code, $editableCodes, true)) {
+        if (!in_array($offering->status?->code, self::EDITABLE_STATUS_CODES, true)) {
             return 'offering_is_locked_for_editing';
         }
 
@@ -83,6 +134,15 @@ class CourseOfferingService {
             $this->syncAdditionalSections($offering, $data);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Illuminate\Database\QueryException $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+            $duplicate = self::duplicateErrorKey($exception);
+            if ($duplicate) {
+                return $duplicate;
+            }
+
+            throw $exception;
         } catch (\Throwable $exception) {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
             throw $exception;
@@ -92,19 +152,23 @@ class CourseOfferingService {
     }
 
     /**
-     * Submit an offering into the approval chain: `draft → submitted`, stamping
-     * who submitted it and when.
+     * Submit an offering into the approval chain.
+     *
+     * ONE transaction, TWO edges: `draft|returned → submitted →
+     * committee_approved`, plus the `committee`/`approved` trail row attributed
+     * to the submitter. The committee leader IS the committee — asking them to
+     * submit and then separately approve their own submission would be two
+     * clicks recording one act.
+     *
+     * The intermediate `submitted` value is a legal waypoint the transition
+     * graph declares, not a resting state, so it is never persisted. Both edges
+     * are still checked, which is what keeps the guard honest.
      *
      * @param \App\Models\Offering\CourseOffering $offering
      * @return \App\Models\Offering\CourseOffering|string
      */
     public function submitOffering(CourseOffering $offering) {
         // ---- pre-flight checks (NO writes yet) ----
-        $submittedId = LookupService::getValueByCode(COURSE_OFFERING_STATUS, COURSE_OFFERING_STATUS_SUBMITTED, needId: true);
-        if (!$submittedId) {
-            return 'status_lookup_value_not_found';
-        }
-
         $currentCode = $offering->status?->code;
         if (!$currentCode) {
             return 'status_lookup_value_not_found';
@@ -114,16 +178,43 @@ class CourseOfferingService {
             return 'invalid_status_transition';
         }
 
+        if (!LookupService::isTransitionAllowed(COURSE_OFFERING_STATUS, COURSE_OFFERING_STATUS_SUBMITTED, COURSE_OFFERING_STATUS_COMMITTEE_APPROVED)) {
+            return 'invalid_status_transition';
+        }
+
         // An offering with no section and no program is not something a tier can
         // act on — it names no cohort to schedule.
         if (!$offering->section_id && !$offering->program_id) {
             return 'offering_needs_a_cohort';
         }
 
+        $committeeApprovedId = LookupService::getValueByCode(COURSE_OFFERING_STATUS, COURSE_OFFERING_STATUS_COMMITTEE_APPROVED, needId: true);
+        $committeeLevelId = LookupService::getValueByCode(APPROVAL_LEVEL, APPROVAL_LEVEL_COMMITTEE, needId: true);
+        $approvedDecisionId = LookupService::getValueByCode(APPROVAL_DECISION, APPROVAL_DECISION_APPROVED, needId: true);
+
+        if (!$committeeApprovedId || !$committeeLevelId || !$approvedDecisionId) {
+            return 'status_lookup_value_not_found';
+        }
+
         try {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
-            $offering->status_lookup_value_id = $submittedId;
+            $nextSequence = (int) CourseOfferingApproval::query()
+                ->where('course_offering_id', $offering->id)
+                ->max('sequence') + 1;
+
+            CourseOfferingApproval::create([
+                'course_offering_id' => $offering->id,
+                'level_lookup_value_id' => $committeeLevelId,
+                'decision_lookup_value_id' => $approvedDecisionId,
+                'sequence' => $nextSequence,
+                'acted_by_id' => Auth::id(),
+                'acted_at' => now(),
+                'remark' => null,
+                'created_at' => now(),
+            ]);
+
+            $offering->status_lookup_value_id = $committeeApprovedId;
             $offering->status_changed_at = now();
             $offering->submitted_by_id = Auth::id();
             $offering->submitted_at = now();
@@ -139,40 +230,48 @@ class CourseOfferingService {
     }
 
     /**
-     * Generic guarded status move, for every edge other than submit.
+     * Put a REJECTED offering back in its author's hands.
      *
-     * The approval tiers do NOT call this directly — they go through
-     * `OfferingApprovalService::record()` (step 10), which writes the trail row
-     * and the status in one transaction. This endpoint exists for the registrar
-     * corrections the trail does not model.
+     * The one status move that is not a tier decision, and deliberately the
+     * narrowest possible endpoint: it takes no target, so it can only ever
+     * perform `rejected → draft`. Its predecessor was a generic
+     * `change-status` that accepted any target and wrote no trail row, which
+     * made it a way to walk an offering to `registrar_approved` with no
+     * approvals recorded at all.
+     *
+     * It exists because `rejected` would otherwise be a trap: the composite
+     * unique on `(semester_id, course_id, section_id)` means a declined
+     * offering permanently blocks its own replacement, and `destroy()` refuses
+     * anything past draft.
      *
      * @param \App\Models\Offering\CourseOffering $offering
-     * @param int $targetStatusId the COURSE_OFFERING_STATUS value to move to
-     *
      * @return \App\Models\Offering\CourseOffering|string
      */
-    public function changeStatus(CourseOffering $offering, int $targetStatusId) {
+    public function reopen(CourseOffering $offering) {
         // ---- pre-flight checks (NO writes yet) ----
-        if ($offering->status_lookup_value_id === $targetStatusId) {
-            return 'nothing_is_changed';
-        }
-
         $currentCode = $offering->status?->code;
-        $targetCode = LookupService::getValueById($targetStatusId)?->code;
-
-        if (!$currentCode || !$targetCode) {
-            return 'status_lookup_value_not_found';
+        if ($currentCode !== COURSE_OFFERING_STATUS_REJECTED) {
+            return 'only_a_rejected_offering_can_be_reopened';
         }
 
-        if (!LookupService::isTransitionAllowed(COURSE_OFFERING_STATUS, $currentCode, $targetCode)) {
+        if (!LookupService::isTransitionAllowed(COURSE_OFFERING_STATUS, $currentCode, COURSE_OFFERING_STATUS_DRAFT)) {
             return 'invalid_status_transition';
+        }
+
+        $draftId = LookupService::getValueByCode(COURSE_OFFERING_STATUS, COURSE_OFFERING_STATUS_DRAFT, needId: true);
+        if (!$draftId) {
+            return 'status_lookup_value_not_found';
         }
 
         try {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
-            $offering->status_lookup_value_id = $targetStatusId;
+            $offering->status_lookup_value_id = $draftId;
             $offering->status_changed_at = now();
+            // It is a draft again, so the previous submission no longer stands.
+            // The rejection itself remains in the trail permanently.
+            $offering->submitted_by_id = null;
+            $offering->submitted_at = null;
             $offering->save();
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

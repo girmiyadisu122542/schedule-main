@@ -53,6 +53,29 @@ class ImportConstant {
     public const BOOLEAN_TRUE_VALUES = ['1', 'true', 'yes', 'y', 't', 'active'];
     public const BOOLEAN_FALSE_VALUES = ['0', 'false', 'no', 'n', 'f', 'inactive'];
 
+    /**
+     * Stands in for a null part of a natural key.
+     *
+     * A sentinel no real code, label or composite cell can collide with — they
+     * are alphanumerics, `-`, `/` and `|`.
+     */
+    public const NULL_KEY_TOKEN = '~null~';
+
+    /** Separates repeated values inside one cell, e.g. cross-listed sections. */
+    public const MULTI_VALUE_SEPARATOR = ';';
+
+    /** Separates the parts of one composite value, e.g. `BSC-CS|2|A`. */
+    public const COMPOSITE_KEY_SEPARATOR = '|';
+
+    /**
+     * Types a deliberate "empty this collection" into a cell.
+     *
+     * A blank cell cannot mean it: the reader cannot tell a blank from a column
+     * the sheet simply did not fill, and silently un-cross-listing 40 courses is
+     * not noticed until a generator double-books a room.
+     */
+    public const CLEAR_SENTINEL = '-';
+
     /** Where the committed worked samples live, relative to the repo root. */
     public const SAMPLE_DIRECTORY = '../Docs/samples/master-data';
 }
