@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\User;
 
+use App\Constants\Otp\OtpMethod;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\User\Action\CreateUserAction;
 use App\Http\Controllers\User\Action\IndexUserAction;
@@ -9,13 +10,18 @@ use App\Http\Controllers\User\Action\UserProfileAction;
 use App\Http\Requests\User\UserBulkOperationRequest;
 use App\Models\User;
 use App\Models\User\UserLog;
+use App\Services\User\SendCredentialsService;
+use Constants\AppConstant;
 use Helper\Response\Response;
 use Helper\Type\State\State;
 use Helper\Type\Status\Status;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Translation\Message;
 
 class UserController extends Controller {
@@ -51,6 +57,88 @@ class UserController extends Controller {
      *
      * @return \Illuminate\Http\JsonResponse
      */
+    /**
+     * Issue a fresh password and email it to the user.
+     *
+     * For the ordinary case where somebody never received their credentials,
+     * or lost them: rather than an admin reading a password out to someone, the
+     * account gets a new one and the same registration mail carries it.
+     *
+     * The old password stops working the moment this succeeds — that is the
+     * point, not a side effect. A password that was possibly seen by the wrong
+     * person should not survive the resend meant to replace it.
+     *
+     * If the mail cannot be sent the change is rolled back, so the user is
+     * never left holding a password that was never delivered. That is the one
+     * place this differs from account creation, where a failed mail leaves the
+     * account standing because the account is worth more than the message.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @param int|string $userId
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function resendPassword(Request $request, $userId): JsonResponse {
+        if (!$this->userCanUpdateUser()) {
+            return Response::_401();
+        }
+
+        // `withUnassignedUsers` matches indexUsers(): a user with no role yet is
+        // exactly the sort who never got their credentials, and omitting this
+        // made them un-resendable — a 404 on a user plainly sitting in the list.
+        $user = User::query()
+            ->applyRoleBasedQuery(
+                currentUserPermission: PERMISSION_UPDATE_USER,
+                withUnassignedUsers: true,
+            )
+            ->find($userId);
+
+        if (!$user) {
+            return Response::_404(Message::get('user_not_found'));
+        }
+
+        if (!$user->email) {
+            return Response::_422(Message::get('user_has_no_email'));
+        }
+
+        $password = Str::password(PASSWORD_LENGTH);
+        $previous = $user->password;
+
+        try {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
+
+            $user->password = Hash::make($password);
+            $user->save();
+
+            $sent = app(SendCredentialsService::class)->send(
+                [
+                    'name' => $user->full_name__localized ?? $user->email,
+                    'email' => $user->email,
+                    'password' => $password,
+                    'phone' => $user->phone ?? null,
+                ],
+                OtpMethod::EMAIL,
+                getCurrentLanguage($request),
+            );
+
+            if (!$sent) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+                $user->password = $previous;
+
+                return Response::_422(Message::get('credentials_could_not_be_sent'));
+            }
+
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
+        } catch (\Throwable $exception) {
+            DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+            throw $exception;
+        }
+
+        return Response::_200([
+            'message' => Message::get('password_resent', ['email' => $user->email]),
+        ]);
+    }
+
     public function changeState(Request $request, $userId): JsonResponse {
         if (!$this->userCanChangeUserState()) {
             return Response::_401();

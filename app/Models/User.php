@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\People\Instructor;
 use App\Models\Role\Role;
 use App\Models\Role\UserPermissionOverride;
 use App\Models\Role\UserRoleBinding;
@@ -13,6 +14,7 @@ use Helper\Model\UserModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 use Translation\Back\English;
 
@@ -76,6 +78,23 @@ class User extends UserModel {
 
     public function userRoleBindings(): HasMany {
         return $this->hasMany(UserRoleBinding::class);
+    }
+
+    /**
+     * The instructor record this account belongs to, if any.
+     *
+     * The inverse of {@see \App\Models\People\Instructor::person()}. One
+     * account is at most one instructor — `instructors.user_id` is unique — so
+     * this is a HasOne rather than a HasMany.
+     *
+     * Reading this direction is what lets the department-head picker ask for
+     * "users who are instructors in department N" without going through the
+     * instructor list and back.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function instructor(): HasOne {
+        return $this->hasOne(Instructor::class, 'user_id');
     }
     public function userPermissionOverrides(): HasMany {
         return $this->hasMany(UserPermissionOverride::class);

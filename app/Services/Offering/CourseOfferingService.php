@@ -385,8 +385,35 @@ class CourseOfferingService {
             'program_id' => $data['program_id'] ?? null,
             'section_id' => $data['section_id'] ?? null,
             'instructor_id' => $data['instructor_id'] ?? null,
-            'expected_students' => (int) ($data['expected_students'] ?? 0),
+            'expected_students' => $this->expectedStudents($data),
             'remark' => $data['remark'] ?? null,
         ];
+    }
+
+    /**
+     * How many students this offering puts in a room.
+     *
+     * Read off the OWNING section rather than typed: the cohort's size is a
+     * fact the section already records, and a second copy on the offering was
+     * free to drift the first time a section grew. This is the same rule
+     * `syncAdditionalSections()` has always applied to the cross-listed
+     * cohorts — the primary one simply used to be entered by hand.
+     *
+     * The number is load-bearing, not decoration: room fitting
+     * (ClassScheduleService, ExamScheduleService and both generators) compares
+     * capacity against it, so a zero here would let any cohort into any room.
+     *
+     * A section-less offering — a whole-cohort lecture — has no section to read,
+     * so it still falls back to a submitted value.
+     *
+     * @param array $data validated request payload
+     * @return int
+     */
+    private function expectedStudents(array $data): int {
+        if (!empty($data['section_id'])) {
+            return (int) Section::whereKey((int) $data['section_id'])->value('expected_students');
+        }
+
+        return (int) ($data['expected_students'] ?? 0);
     }
 }

@@ -8,6 +8,7 @@ use App\Http\Requests\Department\DepartmentRequest;
 use App\Http\Requests\Import\DepartmentImportRequest;
 use App\Models\Academic\Department;
 use App\Services\Academic\DepartmentService;
+use App\Services\User\DepartmentScopeService;
 use App\Support\Import\ColumnMap\AbstractColumnMap;
 use App\Support\Import\ColumnMap\DepartmentColumnMap;
 use Helper\Response\Response;
@@ -53,7 +54,7 @@ class DepartmentController extends Controller {
         $isActive = $request->input('is_active');
 
         return Department::query()
-            ->with(['college', 'head', 'user'])
+            ->with(['college', 'head', 'rooms', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
                     ->where(function ($query) use ($search) {
@@ -63,6 +64,23 @@ class DepartmentController extends Controller {
                     });
             })
             ->when($collegeId, fn ($query) => $query->where('college_id', (int) $collegeId))
+            // ---- "only the departments I may act for" ----
+            // Opt-in, because this endpoint feeds both the master-data screen
+            // (which lists the institution) and the pickers on screens where a
+            // user authors something. A Committee Leader filing an offering may
+            // only file it for their own department, so offering them the whole
+            // institution is a list of choices that would each be refused.
+            //
+            // Mirrors DepartmentScopeService exactly: null means unrestricted
+            // and nothing is narrowed; an EMPTY array means bound to nothing,
+            // which must return no rows rather than every row.
+            ->when($request->boolean('authorable'), function ($query) {
+                $scope = app(DepartmentScopeService::class)->departmentIds();
+
+                if ($scope !== null) {
+                    $query->whereIn('id', $scope);
+                }
+            })
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))
             ->latest('updated_at');
     }
@@ -114,7 +132,7 @@ class DepartmentController extends Controller {
         }
 
         $department = Department::query()
-            ->with(['college', 'head', 'user'])
+            ->with(['college', 'head', 'rooms', 'user'])
             ->when(ctype_digit((string) $key), fn ($query) => $query->where('id', (int) $key))
             ->when(!ctype_digit((string) $key), fn ($query) => $query->where('uuid', $key))
             ->first();

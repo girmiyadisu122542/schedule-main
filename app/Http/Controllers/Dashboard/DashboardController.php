@@ -26,10 +26,16 @@ class DashboardController extends Controller {
      * @return \Illuminate\Http\JsonResponse
      */
     public function stats(): JsonResponse {
-        if (!$this->userCanSeeDashboard()) {
-            return Response::_403();
-        }
-
+        // No permission gate. The landing screen is the first thing every
+        // signed-in user sees, so gating it on `see:dashboard` meant any role
+        // that had not been granted that permission — including every role
+        // created after the seeder ran — logged in to a 403 instead of a home
+        // page. Authentication is the only thing this needs; the route already
+        // sits behind the API guard.
+        //
+        // Nothing here leaks: the figures are current-semester totals, the same
+        // summary for everyone, and each detail screen behind them still
+        // enforces its own permission.
         $semester = Semester::with('status')->where('is_current', true)->first();
 
         return Response::_200([

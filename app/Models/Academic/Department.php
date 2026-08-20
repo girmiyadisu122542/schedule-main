@@ -5,6 +5,7 @@ namespace App\Models\Academic;
 use App\Models\Catalogue\Course;
 use App\Models\Offering\CourseOffering;
 use App\Models\People\Instructor;
+use App\Models\Physical\Room;
 use App\Models\User;
 use Helper\Field\Field;
 use Helper\Model\ScopedModel;
@@ -105,6 +106,20 @@ class Department extends ScopedModel {
     }
 
     /**
+     * Relationship Room — the rooms this department schedules into.
+     *
+     * Ownership is exclusive: a room appears under exactly one department, so
+     * this is the whole answer to "where can our classes go". A department with
+     * an empty list is not blocked — its classes are placed with no room and a
+     * coordinator fills them in later.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function rooms(): HasMany {
+        return $this->hasMany(Room::class);
+    }
+
+    /**
      * Fields returned by the list and detail endpoints.
      *
      * @return array
@@ -120,6 +135,9 @@ class Department extends ScopedModel {
             Field::isActive()->asBool(),
             Field::makeResource('college', fields: 'idAndNameFields'),
             Field::makeResource('head', fields: 'idAndNameFields'),
+            // The assigned rooms, so the edit form can repopulate its picker.
+            // A collection, not a resource — a department holds many rooms.
+            Field::makeCollection('rooms', fields: 'idAndNameFields'),
             Field::makeResource('created_by', 'user', fields: 'idAndNameFields'),
             Field::createdAt(fn ($data) => $data->created_at->format(DATE_FORMAT)),
         ];

@@ -11,6 +11,7 @@ use Constants\AppConstant;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Translation\Message;
 
 class ClassScheduleService {
 
@@ -47,7 +48,7 @@ class ClassScheduleService {
             return 'course_offering_not_found';
         }
 
-        $guard = $this->guardInputs($offering, $data);
+        $guard = $this->guardInputs($offering, $data, isCreate: true);
         if ($guard !== null) {
             return $guard;
         }
@@ -92,6 +93,78 @@ class ClassScheduleService {
         }
 
         return $schedule;
+    }
+
+    /**
+     * Place SEVERAL meetings for one course in a single action.
+     *
+     * What Create actually means for a coordinator: a course meets more than
+     * once a week, so the dialog collects every day and time at once instead of
+     * being reopened per sitting with the same course, room and instructor
+     * re-picked each time.
+     *
+     * Each slot is written in its OWN transaction, deliberately. A batch is not
+     * all-or-nothing: if the Wednesday slot clashes with something, the Monday
+     * and Friday ones are still worth having, and the response says which slot
+     * did not land and why. Rolling the lot back would make one clash cost the
+     * whole batch.
+     *
+     * Every slot goes through the same `createSchedule()` the single path uses,
+     * so approval, room ownership, instructor capability, the weekly-load cap
+     * and clash detection all apply per slot — a batch cannot place anything a
+     * single create would refuse.
+     *
+     * @param array $data validated request payload, carrying `slots`
+     *
+     * @return array{created: array<int, \App\Models\Schedule\ClassSchedule>, failed: array<int, array>}
+     */
+    public function createSchedules(array $data): array {
+        $shared = [
+            'course_offering_id' => $data['course_offering_id'],
+            'instructor_id' => $data['instructor_id'] ?? null,
+            'room_id' => $data['room_id'] ?? null,
+            'session_type_lookup_value_id' => $data['session_type_lookup_value_id'] ?? null,
+        ];
+
+        $created = [];
+        $failed = [];
+
+        foreach (array_values($data['slots'] ?? []) as $index => $slot) {
+            // Per-slot values win; the shared ones fill the gaps. `??` rather
+            // than array_merge so an explicitly-null slot room still falls back
+            // instead of clearing the shared choice.
+            $payload = [
+                'course_offering_id' => $shared['course_offering_id'],
+                'instructor_id' => $slot['instructor_id'] ?? $shared['instructor_id'],
+                'room_id' => $slot['room_id'] ?? $shared['room_id'],
+                'session_type_lookup_value_id' => $slot['session_type_lookup_value_id']
+                    ?? $shared['session_type_lookup_value_id'],
+                'day_of_week' => $slot['day_of_week'],
+                'start_time' => $slot['start_time'],
+                'end_time' => $slot['end_time'],
+            ];
+
+            $result = $this->createSchedule($payload);
+
+            if (is_string($result)) {
+                $message = Message::get($result);
+
+                $failed[] = [
+                    'index' => $index,
+                    'day_of_week' => $slot['day_of_week'],
+                    'start_time' => $slot['start_time'],
+                    'end_time' => $slot['end_time'],
+                    'reason' => $result,
+                    'reason_message' => is_string($message) && $message !== '' ? $message : $result,
+                ];
+
+                continue;
+            }
+
+            $created[] = $result;
+        }
+
+        return ['created' => $created, 'failed' => $failed];
     }
 
     /**
@@ -270,11 +343,40 @@ class ClassScheduleService {
      *
      * @return string|null an error translation key, or null when the input is fine
      */
-    private function guardInputs(CourseOffering $offering, array $data): ?string {
+    private function guardInputs(CourseOffering $offering, array $data, bool $isCreate = false): ?string {
         // A timetable is built from approved offerings. Scheduling one that is
         // still in the approval chain would publish a decision nobody made.
         if ($offering->status?->code !== COURSE_OFFERING_STATUS_REGISTRAR_APPROVED) {
             return 'offering_is_not_approved';
+        }
+
+        // A course gets the week its catalogue entry declares — no more.
+        //
+        // Only on CREATE: editing one of the meetings already counted must not
+        // trip a limit it is itself part of.
+        //
+        // Without this, clicking Create repeatedly kept adding sessions to the
+        // same course forever. The clash rules never caught it, because a
+        // second meeting on a DIFFERENT day is not a clash — it is simply more
+        // teaching than the course has. The generator has always respected this
+        // figure; hand-placement ignored it, and the two paths disagreed about
+        // what a course's week even was.
+        if ($isCreate) {
+            $allowed = app(CourseWeeklyLoadService::class)->meetingCountFor(
+                $offering,
+                app(ScheduleSettingService::class)->forOffering($offering),
+            );
+
+            // Cancelled meetings are not teaching, so they do not count against
+            // the load — the same reading `state` has everywhere else.
+            $existing = ClassSchedule::query()
+                ->where('course_offering_id', $offering->id)
+                ->where('state', STATE_ACTIVE)
+                ->count();
+
+            if ($existing >= $allowed) {
+                return 'offering_already_has_its_weekly_sessions';
+            }
         }
 
         if (!empty($data['instructor_id'])) {
@@ -288,6 +390,14 @@ class ClassScheduleService {
             $room = Room::find((int) $data['room_id']);
             if (!$room?->is_active) {
                 return 'room_is_not_active';
+            }
+
+            // A department schedules into its own rooms only. Enforced here as
+            // well as in the generator so the rule means the same thing however
+            // a class gets placed — a hand-placed meeting cannot sit in a room
+            // the department was never given.
+            if ((int) $room->department_id !== (int) $offering->department_id) {
+                return 'room_is_not_owned_by_department';
             }
 
             if ($room->capacity < $offering->expected_students) {

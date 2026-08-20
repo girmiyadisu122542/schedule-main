@@ -382,6 +382,17 @@ class ExamScheduleGeneratorService {
             return ['date' => null, 'reason' => 'semester_has_no_exam_period'];
         }
 
+        // Exams obey the same ownership rule as classes: a department sits its
+        // papers in its own halls, and a hall belonging to nobody is used by
+        // nobody.
+        $rooms = $rooms->filter(
+            fn (Room $room): bool => (int) $room->department_id === (int) $offering->department_id
+        )->values();
+
+        // No halls of their own — the sitting is still placed, with the hall
+        // left blank for a coordinator, exactly as a roomless class meeting is.
+        $roomless = $rooms->isEmpty();
+
         // Halls that take the whole cohort on their own, smallest first.
         $wholeRooms = $rooms->filter(
             fn (Room $room): bool => $this->seats($room) >= $seatsNeeded
@@ -390,9 +401,9 @@ class ExamScheduleGeneratorService {
         // No single hall is big enough — the normal case for a large cohort,
         // not an error. The paper is then split across several halls sitting it
         // at the same hour (C9).
-        $split = $wholeRooms->isEmpty() ? $this->chooseHalls($rooms, $seatsNeeded) : null;
+        $split = !$roomless && $wholeRooms->isEmpty() ? $this->chooseHalls($rooms, $seatsNeeded) : null;
 
-        if ($wholeRooms->isEmpty() && $split === null) {
+        if (!$roomless && $wholeRooms->isEmpty() && $split === null) {
             return ['date' => null, 'reason' => 'no_exam_venue_large_enough'];
         }
 
@@ -422,10 +433,13 @@ class ExamScheduleGeneratorService {
                     continue;
                 }
 
-                // One hall if the cohort fits in one, otherwise the split set.
-                $attempts = $split !== null
-                    ? [$split]
-                    : $wholeRooms->map(fn (Room $room): array => [['room' => $room, 'seats' => $seatsNeeded]])->all();
+                // One hall if the cohort fits in one, otherwise the split set —
+                // or a single hall-less sitting when the department owns none.
+                $attempts = match (true) {
+                    $roomless => [[['room' => null, 'seats' => $seatsNeeded]]],
+                    $split !== null => [$split],
+                    default => $wholeRooms->map(fn (Room $room): array => [['room' => $room, 'seats' => $seatsNeeded]])->all(),
+                };
 
                 foreach ($attempts as $halls) {
                     $written = $this->writeSitting($offering, $halls, $date, $slot, $semester, $run, $examTypeId, $draftStatusId, $setting);
@@ -541,7 +555,9 @@ class ExamScheduleGeneratorService {
                     'exam_date' => $date,
                     'start_time' => $slot['start'],
                     'end_time' => $slot['end'],
-                    'room_id' => $hall['room']->id,
+                    // Null when the department owns no exam halls — the sitting
+                    // still carries its paper, its date and its window.
+                    'room_id' => $hall['room']?->id,
                     'seat_allocation' => $hall['seats'],
                     'part_number' => $index + 1,
                     'part_count' => $partCount,

@@ -52,7 +52,7 @@ class RoomController extends Controller {
         $isActive = $request->input('is_active');
 
         return Room::query()
-            ->with(['building.campus', 'roomType', 'user'])
+            ->with(['building.campus', 'roomType', 'department', 'user'])
             ->when($search, function ($query) use ($search) {
                 $query
                     ->where(function ($query) use ($search) {
@@ -62,6 +62,18 @@ class RoomController extends Controller {
                     });
             })
             ->when($request->input('building_id'), fn ($query) => $query->where('building_id', (int) $request->input('building_id')))
+            // The department room picker asks for what it may actually claim:
+            // rooms nobody owns, plus the ones it already holds. Without this
+            // the picker would happily offer another department's rooms and
+            // then be refused on save.
+            ->when($request->has('claimable_by_department_id'), function ($query) use ($request) {
+                $departmentId = (int) $request->input('claimable_by_department_id');
+
+                $query->where(function ($query) use ($departmentId) {
+                    $query->whereNull('department_id')
+                        ->when($departmentId, fn ($query) => $query->orWhere('department_id', $departmentId));
+                });
+            })
             ->when($request->input('room_type_lookup_value_id'), fn ($query) => $query->where('room_type_lookup_value_id', (int) $request->input('room_type_lookup_value_id')))
             ->when($request->has('is_exam_venue'), fn ($query) => $query->where('is_exam_venue', $request->boolean('is_exam_venue')))
             ->when($isActive !== null, fn ($query) => $query->where('is_active', filter_var($isActive, FILTER_VALIDATE_BOOLEAN)))

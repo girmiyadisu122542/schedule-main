@@ -8,6 +8,7 @@ use App\Models\Offering\CourseOffering;
 use App\Models\Physical\Room;
 use App\Models\Schedule\ClassSchedule;
 use App\Models\Schedule\ScheduleGenerationRun;
+use App\Models\Schedule\ScheduleSetting;
 use App\Services\Lookup\LookupService;
 use Constants\AppConstant;
 use Illuminate\Database\QueryException;
@@ -295,7 +296,10 @@ class ClassScheduleGeneratorService {
      * @return array{requested: int, placed: int, reason: string|null}
      */
     private function placeOffering(CourseOffering $offering, Collection $rooms, ScheduleGenerationRun $run, int $draftStatusId): array {
-        $meetings = $this->meetingsFor($offering);
+        // The grid decides how many meetings a course's weekly hours become, so
+        // the setting is resolved here rather than inside meetingsFor().
+        $settings = app(ScheduleSettingService::class);
+        $meetings = app(CourseWeeklyLoadService::class)->meetingsFor($offering, $settings->forOffering($offering));
         $placed = 0;
         $reason = null;
         // One meeting per day reads better than two back-to-back, and it is what
@@ -319,37 +323,11 @@ class ClassScheduleGeneratorService {
     }
 
     /**
-     * The weekly meetings one offering needs, as SESSION_TYPE codes.
-     *
-     * The course's declared weekly load drives it: a course with lab hours gets
-     * a lab meeting, one with tutorial hours gets a tutorial, and the remaining
-     * sessions are lectures.
-     *
-     * @param \App\Models\Offering\CourseOffering $offering
-     * @return array<int, string>
+     * The weekly meetings one offering needs now live in
+     * {@see \App\Services\Schedule\CourseWeeklyLoadService}, because
+     * hand-placement has to enforce the same figure the generator produces.
+     * Two copies of that rule was exactly how the two paths drifted apart.
      */
-    private function meetingsFor(CourseOffering $offering): array {
-        $course = $offering->course;
-
-        $sessions = (int) ($course?->sessions_per_week ?: ScheduleConstant::DEFAULT_SESSIONS_PER_WEEK);
-        $sessions = max(1, min($sessions, ScheduleConstant::MAX_SESSIONS_PER_WEEK));
-
-        $meetings = [];
-        if ((float) ($course?->lab_hours_per_week ?? 0) > 0) {
-            $meetings[] = SESSION_TYPE_LAB;
-        }
-
-        if ((float) ($course?->tutorial_hours_per_week ?? 0) > 0) {
-            $meetings[] = SESSION_TYPE_TUTORIAL;
-        }
-
-        // Whatever is left over is lecture time — and there is always at least
-        // one lecture, even for a course that is mostly lab work.
-        $lectures = max(1, $sessions - count($meetings));
-        $meetings = array_merge(array_fill(0, $lectures, SESSION_TYPE_LECTURE), $meetings);
-
-        return array_slice($meetings, 0, ScheduleConstant::MAX_SESSIONS_PER_WEEK);
-    }
 
     /**
      * Find a free (day, slot, room) for one meeting and write it.
@@ -372,7 +350,14 @@ class ClassScheduleGeneratorService {
         $sessionTypeId = LookupService::getValueByCode(SESSION_TYPE, $sessionTypeCode, needId: true);
         $candidateRooms = $this->roomsFor($offering, $sessionTypeCode, $rooms);
 
-        if ($candidateRooms->isEmpty()) {
+        // A department that owns no rooms is placed WITHOUT one: the course,
+        // the day and the time are decided here and the room is filled in by
+        // hand later. `[null]` drives the candidate loop exactly once per slot,
+        // which is what a roomless placement is — one choice, not one per room.
+        $roomless = $this->departmentOwnsNoRooms($offering, $rooms);
+        $roomChoices = $roomless ? collect([null]) : $candidateRooms;
+
+        if ($roomChoices->isEmpty()) {
             return ['day' => null, 'reason' => 'no_room_large_enough'];
         }
 
@@ -422,10 +407,11 @@ class ClassScheduleGeneratorService {
                     continue;
                 }
 
-                foreach ($candidateRooms as $room) {
+                foreach ($roomChoices as $room) {
                     // A cohort cannot cross campus between periods, so this is
-                    // a rejection rather than a penalty.
-                    if (!$allowCrossCampus && $scorer->crossesCampus($room, $sectionDay)) {
+                    // a rejection rather than a penalty. A roomless placement
+                    // has no campus to cross to, so the question does not arise.
+                    if ($room && !$allowCrossCampus && $scorer->crossesCampus($room, $sectionDay)) {
                         $lastConflict = 'cohort_would_cross_campus';
 
                         continue;
@@ -455,7 +441,9 @@ class ClassScheduleGeneratorService {
                 'semester_id' => $offering->semester_id,
                 'section_id' => $offering->section_id,
                 'instructor_id' => $offering->instructor_id,
-                'room_id' => $room->id,
+                // Null for a department with no rooms of its own — the meeting
+                // still carries its course, day and time.
+                'room_id' => $room?->id,
                 'session_type_lookup_value_id' => $sessionTypeId,
                 'day_of_week' => $day,
                 'start_time' => $slot['start'],
@@ -565,16 +553,42 @@ class ClassScheduleGeneratorService {
      * @return \Illuminate\Support\Collection
      */
     private function roomsFor(CourseOffering $offering, string $sessionTypeCode, Collection $rooms): Collection {
-        $fitting = $rooms->filter(fn (Room $room): bool => $room->capacity >= $offering->expected_students);
+        // A department schedules into ITS OWN rooms and no others. Rooms with
+        // no department belong to nobody and are never picked up here — an
+        // unassigned room is one that has not been given out yet, not a spare.
+        $owned = $rooms->filter(
+            fn (Room $room): bool => (int) $room->department_id === (int) $offering->department_id
+        );
+
+        $fitting = $owned->filter(fn (Room $room): bool => $room->capacity >= $offering->expected_students);
 
         if ($sessionTypeCode !== SESSION_TYPE_LAB) {
             return $fitting->values();
         }
 
-        // A lab needs a lab. If the campus has none big enough, any fitting room
-        // beats leaving the meeting unplaced.
+        // A lab needs a lab. If the department has none big enough, any fitting
+        // room of theirs beats leaving the meeting unplaced.
         $labs = $fitting->filter(fn (Room $room): bool => $room->roomType?->code === ROOM_TYPE_LAB);
 
         return $labs->isNotEmpty() ? $labs->values() : $fitting->values();
+    }
+
+    /**
+     * Whether this offering's department owns no rooms at all.
+     *
+     * The distinction that matters: a department with rooms whose rooms are all
+     * too small has a fixable problem and is told so (`no_room_large_enough`).
+     * A department with NO rooms has not been given any yet, and its classes
+     * are placed with the room left blank rather than not placed at all.
+     *
+     * @param \App\Models\Offering\CourseOffering $offering
+     * @param \Illuminate\Support\Collection $rooms every active room
+     *
+     * @return bool
+     */
+    private function departmentOwnsNoRooms(CourseOffering $offering, Collection $rooms): bool {
+        return !$rooms->contains(
+            fn (Room $room): bool => (int) $room->department_id === (int) $offering->department_id
+        );
     }
 }

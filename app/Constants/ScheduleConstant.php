@@ -58,6 +58,26 @@ class ScheduleConstant {
     public const MAX_SESSIONS_PER_WEEK = 5;
 
     /**
+     * The lifecycle decisions a bulk run may carry.
+     *
+     * `delete` is here alongside `cancel` because they are different acts:
+     * cancelling keeps the row and frees its slot, deleting removes a draft
+     * that should never have existed. Both are offered; neither is implied.
+     *
+     * @var array<int, string>
+     */
+    public const BULK_ACTIONS = ['publish', 'confirm', 'cancel', 'delete'];
+
+    /**
+     * How many rows one bulk run may carry.
+     *
+     * A run is a loop of real service calls, each with its own transaction and
+     * locking reads — not a single UPDATE — so the ceiling is what keeps one
+     * request from running past any sensible timeout.
+     */
+    public const MAX_BULK_ROWS = 200;
+
+    /**
      * The sittings-per-day grid for exam scheduling. Fewer, longer windows than
      * the teaching grid: an exam session runs three hours and a hall needs
      * turning round between them.

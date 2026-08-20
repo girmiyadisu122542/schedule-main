@@ -341,6 +341,12 @@ class ExamScheduleService {
                 return 'room_is_not_an_exam_venue';
             }
 
+            // Exams obey the same ownership rule as classes: a department sits
+            // its papers in its own halls.
+            if ((int) $room->department_id !== (int) $offering->department_id) {
+                return 'room_is_not_owned_by_department';
+            }
+
             // Spaced seating, not teaching capacity — a hall that seats 60 for a
             // lecture seats far fewer candidates a desk apart.
             $seats = $room->exam_capacity ?? $room->capacity;

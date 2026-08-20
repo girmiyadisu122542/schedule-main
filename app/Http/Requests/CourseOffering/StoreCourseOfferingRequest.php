@@ -10,6 +10,7 @@ use App\Models\Academic\Semester;
 use App\Models\Catalogue\Course;
 use App\Models\People\Instructor;
 use Helper\Permission\PermissionAction;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
 use Translation\Message;
 
@@ -31,6 +32,30 @@ class StoreCourseOfferingRequest extends FormRequest {
     public function authorize(): bool {
         return $this->userCanCreateCourseOffering()
             && $this->scopeAllowsAuthoring($this->integerOrNull('department_id'));
+    }
+
+    /**
+     * Say WHICH of the two checks refused.
+     *
+     * Laravel's default is a bare "This action is unauthorized", which sends
+     * every reader hunting through role permissions — even when the permission
+     * was fine and it was the department scope that refused. The two failures
+     * have completely different fixes: grant a permission, or bind the user to
+     * the department (see DepartmentScopeService::resolve — head, dean, or an
+     * instructor row carrying their `user_id`).
+     *
+     * Still a 403 either way; only the sentence changes.
+     *
+     * @return void
+     *
+     * @throws \Illuminate\Auth\Access\AuthorizationException
+     */
+    protected function failedAuthorization(): void {
+        throw new AuthorizationException(
+            $this->userCanCreateCourseOffering()
+                ? Message::get('offering_department_out_of_scope')
+                : Message::get('unauthorized_action')
+        );
     }
 
     /**

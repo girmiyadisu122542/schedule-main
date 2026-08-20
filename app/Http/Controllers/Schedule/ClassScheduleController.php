@@ -12,6 +12,8 @@ use App\Services\Schedule\PlacementSuggestionService;
 use App\Models\Physical\Room;
 use App\Services\Schedule\ScheduleBulkService;
 use App\Services\Schedule\ClassScheduleService;
+use App\Http\Requests\Schedule\ScheduleBulkActionRequest;
+use App\Services\Common\BulkActionRunner;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -148,8 +150,51 @@ class ClassScheduleController extends Controller {
             return Response::_403();
         }
 
+        $service = app(ClassScheduleService::class);
+        $validated = $request->validated();
+
+        // A batch keeps the batch response shape even when it carries one slot,
+        // so a caller that sends `slots` always parses the same thing back.
+        if (!empty($validated['slots'])) {
+            try {
+                $outcome = $service->createSchedules($validated);
+            } catch (\Exception $exception) {
+                return Response::_500(Message::get('unable_to_create_class_schedule'));
+            }
+
+            $payload = [
+                'data' => [
+                    'created' => collect($outcome['created'])
+                        ->map(fn ($schedule) => $schedule->fresh(self::EAGER)->resource())
+                        ->all(),
+                    'failed' => $outcome['failed'],
+                    'created_count' => count($outcome['created']),
+                    'failed_count' => count($outcome['failed']),
+                ],
+                'message' => Message::get('class_schedules_created_summary', [
+                    'created' => count($outcome['created']),
+                    'failed' => count($outcome['failed']),
+                ]),
+            ];
+
+            // The status tells the caller what happened without reading counts:
+            // 201 everything landed, 207 some did, 422 none did. A 201 on a
+            // batch where nothing was written would be a lie, and a 422 on one
+            // that wrote three of four would throw away work that succeeded.
+            if (empty($outcome['created'])) {
+                return Response::_422(
+                    $payload['message'],
+                    $outcome['failed'],
+                );
+            }
+
+            return empty($outcome['failed'])
+                ? Response::_201($payload)
+                : Response::_207($payload);
+        }
+
         try {
-            $result = app(ClassScheduleService::class)->createSchedule($request->validated());
+            $result = $service->createSchedule($validated);
         } catch (\Exception $exception) {
             return Response::_500(Message::get('unable_to_create_class_schedule'));
         }
@@ -242,6 +287,90 @@ class ClassScheduleController extends Controller {
      * @param int $id
      * @return \Illuminate\Http\JsonResponse
      */
+    /**
+     * Take one lifecycle decision over many meetings at once.
+     *
+     * Every row goes through the SAME service call the single-item endpoints
+     * use, so publishing forty meetings applies the same permission, scope and
+     * lifecycle rules forty times. Nothing here can approve a row that the
+     * single endpoint would refuse.
+     *
+     * The result is therefore partial by design: the response says how many
+     * went through and names the ones that did not, with the reason. See
+     * {@see \App\Services\Common\BulkActionRunner} for why that beats an
+     * all-or-nothing batch.
+     *
+     * @param \App\Http\Requests\Schedule\ScheduleBulkActionRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function bulkAction(ScheduleBulkActionRequest $request): JsonResponse {
+        $action = $request->input('action');
+        $service = app(ClassScheduleService::class);
+
+        $permitted = match ($action) {
+            'publish' => $this->userCanPublishClassSchedule(),
+            'confirm' => $this->userCanConfirmClassSchedule(),
+            'cancel' => $this->userCanCancelClassSchedule(),
+            'delete' => $this->userCanDeleteClassSchedule(),
+            default => false,
+        };
+
+        if (!$permitted) {
+            return Response::_403();
+        }
+
+        $remark = $request->input('remark');
+
+        $outcome = BulkActionRunner::run(
+            $request->input('schedule_ids', []),
+            fn ($id) => ClassSchedule::with(['status', 'courseOffering.course', 'courseOffering.section.program'])
+                ->find($id),
+            function (ClassSchedule $schedule) use ($action, $service, $remark) {
+                // Scope is re-checked per row, exactly as the single-item
+                // endpoints do — a list of ids is not a claim of ownership.
+                if (!$this->scopeAllowsSchedule($schedule)) {
+                    return 'schedule_out_of_scope';
+                }
+
+                return match ($action) {
+                    'publish' => $service->publish($schedule),
+                    'confirm' => $service->confirm($schedule, $remark),
+                    'cancel' => $service->cancel($schedule),
+                    'delete' => $this->deleteForBulk($schedule),
+                    default => 'action_not_found',
+                };
+            },
+            fn (ClassSchedule $schedule) => $schedule->displayLabel(),
+        );
+
+        return Response::_200([
+            'data' => $outcome,
+            'message' => Message::get('bulk_action_completed', [
+                'succeeded' => $outcome['succeeded'],
+                'failed' => count($outcome['failed']),
+            ]),
+        ]);
+    }
+
+    /**
+     * Delete one meeting for a bulk run, in the shape the runner expects.
+     *
+     * Only a draft may be deleted — a published meeting is what students are
+     * reading, and the way to withdraw one is `cancel`, which keeps the record.
+     *
+     * @param \App\Models\Schedule\ClassSchedule $schedule
+     * @return \App\Models\Schedule\ClassSchedule|string
+     */
+    private function deleteForBulk(ClassSchedule $schedule) {
+        if (!$schedule->isDraft()) {
+            return 'only_draft_schedules_can_be_deleted';
+        }
+
+        $schedule->delete();
+
+        return $schedule;
+    }
+
     public function publish($id): JsonResponse {
         if (!$this->userCanPublishClassSchedule()) {
             return Response::_403();

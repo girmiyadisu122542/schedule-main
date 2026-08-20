@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Report;
 
 use App\Http\Controllers\Concerns\ScopesSchedulesToDepartment;
 use App\Http\Controllers\Controller;
+use App\Services\Export\ReportExportService;
 use App\Services\Report\ScheduleReportService;
 use App\Services\Report\TermSetupService;
 use Helper\Response\Response;
@@ -31,9 +32,9 @@ class ScheduleReportController extends Controller {
      * Room utilisation for a semester.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
      */
-    public function roomUtilisation(Request $request): JsonResponse {
+    public function roomUtilisation(Request $request) {
         if (!$this->userCanSeeReport()) {
             return Response::_403();
         }
@@ -43,21 +44,31 @@ class ScheduleReportController extends Controller {
             return Response::_422(Message::get('semester_is_required'));
         }
 
-        return Response::_200([
-            'data' => app(ScheduleReportService::class)->roomUtilisation($semesterId, [
+        $report = app(ScheduleReportService::class)->roomUtilisation($semesterId, [
                 'building_id' => $request->input('building_id'),
                 'campus_id' => $request->input('campus_id'),
-            ]),
-        ]);
+            ]);
+
+        // Same computed result the JSON endpoint returns, filters and
+        // all — so an export is exactly what the reader was looking at.
+        if ($request->filled('export')) {
+            return app(ReportExportService::class)->download(
+                $report,
+                'room-utilisation',
+                (string) $request->input('export'),
+            );
+        }
+
+        return Response::_200(['data' => $report]);
     }
 
     /**
      * Instructor workload against each person's declared ceiling.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
      */
-    public function instructorWorkload(Request $request): JsonResponse {
+    public function instructorWorkload(Request $request) {
         if (!$this->userCanSeeReport()) {
             return Response::_403();
         }
@@ -80,20 +91,30 @@ class ScheduleReportController extends Controller {
             $departmentId ??= $scope[0] ?? -1;
         }
 
-        return Response::_200([
-            'data' => app(ScheduleReportService::class)->instructorWorkload($semesterId, [
+        $report = app(ScheduleReportService::class)->instructorWorkload($semesterId, [
                 'department_id' => $departmentId,
-            ]),
-        ]);
+            ]);
+
+        // Same computed result the JSON endpoint returns, filters and
+        // all — so an export is exactly what the reader was looking at.
+        if ($request->filled('export')) {
+            return app(ReportExportService::class)->download(
+                $report,
+                'instructor-workload',
+                (string) $request->input('export'),
+            );
+        }
+
+        return Response::_200(['data' => $report]);
     }
 
     /**
      * Everything still wrong with a semester — the registrar's morning screen.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
      */
-    public function exceptions(Request $request): JsonResponse {
+    public function exceptions(Request $request) {
         if (!$this->userCanSeeReport()) {
             return Response::_403();
         }
@@ -103,18 +124,28 @@ class ScheduleReportController extends Controller {
             return Response::_422(Message::get('semester_is_required'));
         }
 
-        return Response::_200([
-            'data' => app(ScheduleReportService::class)->exceptions($semesterId),
-        ]);
+        $report = app(ScheduleReportService::class)->exceptions($semesterId);
+
+        // Same computed result the JSON endpoint returns, filters and
+        // all — so an export is exactly what the reader was looking at.
+        if ($request->filled('export')) {
+            return app(ReportExportService::class)->download(
+                $report,
+                'exceptions',
+                (string) $request->input('export'),
+            );
+        }
+
+        return Response::_200(['data' => $report]);
     }
 
     /**
      * Two semesters side by side.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
      */
-    public function compare(Request $request): JsonResponse {
+    public function compare(Request $request) {
         if (!$this->userCanSeeReport()) {
             return Response::_403();
         }
@@ -126,9 +157,19 @@ class ScheduleReportController extends Controller {
             return Response::_422(Message::get('semester_is_required'));
         }
 
-        return Response::_200([
-            'data' => app(ScheduleReportService::class)->compare($semesterId, $compareId),
-        ]);
+        $report = app(ScheduleReportService::class)->compare($semesterId, $compareId);
+
+        // Same computed result the JSON endpoint returns, filters and
+        // all — so an export is exactly what the reader was looking at.
+        if ($request->filled('export')) {
+            return app(ReportExportService::class)->download(
+                $report,
+                'compare',
+                (string) $request->input('export'),
+            );
+        }
+
+        return Response::_200(['data' => $report]);
     }
 
     /**
@@ -140,9 +181,9 @@ class ScheduleReportController extends Controller {
      * it out of reach of exactly the new coordinator it exists for.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
      */
-    public function termSetup(Request $request): JsonResponse {
+    public function termSetup(Request $request) {
         if (!$this->userCanSeeReport()) {
             return Response::_403();
         }
@@ -152,8 +193,26 @@ class ScheduleReportController extends Controller {
             return Response::_422(Message::get('semester_is_required'));
         }
 
-        return Response::_200([
-            'data' => app(TermSetupService::class)->checklist($semesterId),
-        ]);
+        $report = app(TermSetupService::class)->checklist($semesterId);
+
+        // This report's rows live under `steps`, not `rows` — it is a checklist,
+        // not a table of figures — so it is handed over in the shape the
+        // exporter reads. The remaining keys are the summary.
+        if ($request->filled('export')) {
+            return app(ReportExportService::class)->download(
+                [
+                    'rows' => $report['steps'] ?? [],
+                    'totals' => [
+                        'ready' => $report['ready'] ?? false,
+                        'complete' => $report['complete'] ?? 0,
+                        'total' => $report['total'] ?? 0,
+                    ],
+                ],
+                'term-setup',
+                (string) $request->input('export'),
+            );
+        }
+
+        return Response::_200(['data' => $report]);
     }
 }

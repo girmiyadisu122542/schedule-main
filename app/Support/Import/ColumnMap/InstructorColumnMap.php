@@ -5,6 +5,7 @@ namespace App\Support\Import\ColumnMap;
 use App\Models\Academic\Department;
 use App\Models\People\Instructor;
 use App\Models\User;
+use App\Services\People\InstructorAccountService;
 
 /**
  * Instructors — one population serving both teaching and invigilation
@@ -31,6 +32,26 @@ class InstructorColumnMap extends AbstractColumnMap {
      */
     public function modelClass(): string {
         return Instructor::class;
+    }
+
+    /**
+     * Give the imported instructor their portal account.
+     *
+     * The import is the bulk half of the same rule the form follows: an
+     * instructor arrives with a login, so a registrar who uploads eighty
+     * teachers does not then have to create eighty users by hand. Idempotent,
+     * so re-importing a sheet does not make second accounts.
+     *
+     * Runs inside the importer's transaction, so a failure here takes the whole
+     * import back rather than leaving accounts for rows that were rolled back.
+     *
+     * @param \App\Models\People\Instructor $record
+     * @param array $values the row's resolved cell values
+     *
+     * @return void
+     */
+    public function afterWrite($record, array $values): void {
+        app(InstructorAccountService::class)->provision($record);
     }
 
     /**
@@ -100,7 +121,10 @@ class InstructorColumnMap extends AbstractColumnMap {
                 ->example('CS')
                 ->exportUsing(fn ($instructor) => $instructor->department?->code),
 
+            // REQUIRED: importing an instructor also creates their portal
+            // account, and this is the login it is created with.
             Column::make('email')
+                ->required()
                 ->rules(['email', 'max:' . MAX_INSTRUCTOR_EMAIL_LENGTH])
                 ->example('alemu.bekele@schedule.com'),
 
@@ -114,7 +138,9 @@ class InstructorColumnMap extends AbstractColumnMap {
                 ->example(ACADEMIC_RANK_ASSISTANT_PROFESSOR)
                 ->exportUsing(fn ($instructor) => $instructor->academicRank?->code),
 
-            // The optional portal account — the person, not a creator.
+            // Rarely needed now: the account is provisioned from `email`
+            // above. Kept so a sheet can point an instructor at an EXISTING
+            // account whose address differs from their contact address.
             Column::make('user_email', 'user_id')
                 ->resolvesTo(User::class, 'email')
                 ->rules(['string', 'max:' . MAX_INSTRUCTOR_EMAIL_LENGTH])

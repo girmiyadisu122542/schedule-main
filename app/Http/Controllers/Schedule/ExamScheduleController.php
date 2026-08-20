@@ -8,6 +8,8 @@ use App\Http\Requests\Schedule\ConfirmExamScheduleRequest;
 use App\Http\Requests\Schedule\ExamScheduleRequest;
 use App\Models\Schedule\ExamSchedule;
 use App\Services\Schedule\ExamScheduleService;
+use App\Http\Requests\Schedule\ScheduleBulkActionRequest;
+use App\Services\Common\BulkActionRunner;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -280,6 +282,78 @@ class ExamScheduleController extends Controller {
      * @param int $id
      * @return \Illuminate\Http\JsonResponse
      */
+    /**
+     * One lifecycle decision over many sittings — the exam counterpart of
+     * {@see \App\Http\Controllers\Schedule\ClassScheduleController::bulkAction()},
+     * with the same per-row guarantees and the same partial-result contract.
+     *
+     * @param \App\Http\Requests\Schedule\ScheduleBulkActionRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function bulkAction(ScheduleBulkActionRequest $request): JsonResponse {
+        $action = $request->input('action');
+        $service = app(ExamScheduleService::class);
+
+        $permitted = match ($action) {
+            'publish' => $this->userCanPublishExamSchedule(),
+            'confirm' => $this->userCanConfirmExamSchedule(),
+            'cancel' => $this->userCanCancelExamSchedule(),
+            'delete' => $this->userCanDeleteExamSchedule(),
+            default => false,
+        };
+
+        if (!$permitted) {
+            return Response::_403();
+        }
+
+        $remark = $request->input('remark');
+
+        $outcome = BulkActionRunner::run(
+            $request->input('schedule_ids', []),
+            fn ($id) => ExamSchedule::with(['status', 'courseOffering.course', 'courseOffering.section.program'])
+                ->find($id),
+            function (ExamSchedule $schedule) use ($action, $service, $remark) {
+                if (!$this->scopeAllowsSchedule($schedule)) {
+                    return 'schedule_out_of_scope';
+                }
+
+                return match ($action) {
+                    'publish' => $service->publish($schedule),
+                    'confirm' => $service->confirm($schedule, $remark),
+                    'cancel' => $service->cancel($schedule),
+                    'delete' => $this->deleteForBulk($schedule),
+                    default => 'action_not_found',
+                };
+            },
+            fn (ExamSchedule $schedule) => $schedule->displayLabel(),
+        );
+
+        return Response::_200([
+            'data' => $outcome,
+            'message' => Message::get('bulk_action_completed', [
+                'succeeded' => $outcome['succeeded'],
+                'failed' => count($outcome['failed']),
+            ]),
+        ]);
+    }
+
+    /**
+     * Delete one sitting for a bulk run. Drafts only — a published sitting is
+     * withdrawn with `cancel`, which keeps the record of what happened.
+     *
+     * @param \App\Models\Schedule\ExamSchedule $schedule
+     * @return \App\Models\Schedule\ExamSchedule|string
+     */
+    private function deleteForBulk(ExamSchedule $schedule) {
+        if (!$schedule->isDraft()) {
+            return 'only_draft_exams_can_be_deleted';
+        }
+
+        $schedule->delete();
+
+        return $schedule;
+    }
+
     public function publish($id): JsonResponse {
         if (!$this->userCanPublishExamSchedule()) {
             return Response::_403();

@@ -40,12 +40,25 @@ class InstructorRequest extends FormRequest {
                 'max:' . MAX_CODE_LENGTH,
                 Instructor::unique('employee_no', $this->route('id')),
             ],
-            'email' => ['nullable', 'email', 'max:' . MAX_INSTRUCTOR_EMAIL_LENGTH],
+            // REQUIRED, because creating an instructor now creates their
+            // portal account: this is both the login and the only address
+            // the one-time password is ever sent to.
+            // Unique among instructors: it becomes the login, and one login
+            // cannot belong to two people. Caught here so the form says so,
+            // rather than the account being silently skipped later.
+            'email' => [
+                'required',
+                'email',
+                'max:' . MAX_INSTRUCTOR_EMAIL_LENGTH,
+                Instructor::unique('email', $this->route('id')),
+            ],
             'phone' => ['nullable', 'string', 'max:' . MAX_PHONE_LENGTH],
             'department_id' => ['required', 'integer', Department::exists()],
             'academic_rank_lookup_value_id' => ['nullable', 'integer', LookupValue::exists()],
-            // The optional portal account — THE PERSON, not a creator reference.
-            // One instructor row per user, so the link is unique.
+            // The portal account — THE PERSON, not a creator reference. Now
+            // provisioned automatically from the email above, so callers no
+            // longer send it; still accepted so an existing link survives a
+            // round trip, and still unique because one user is one instructor.
             'user_id' => [
                 'nullable',
                 'integer',
