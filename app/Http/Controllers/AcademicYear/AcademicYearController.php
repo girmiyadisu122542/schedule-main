@@ -33,7 +33,7 @@ class AcademicYearController extends Controller {
 
         $academicYears = AcademicYear::query()
             ->with('user')
-            ->when($search, fn ($query) => $query->where('code', 'ilike', "%{$search}%"))
+            ->when($search, fn ($query) => $query->where('code', 'like', "%{$search}%"))
             ->when($isCurrent !== null, fn ($query) => $query->where('is_current', filter_var($isCurrent, FILTER_VALIDATE_BOOLEAN)))
             ->orderByDesc('start_date')
             ->paginate(static::getPerPage());

@@ -42,13 +42,27 @@ trait IndexUserAction {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->orWhere('phone', 'ilike', "%{$search}%")
-                            ->orWhere('email', 'ilike', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
                             ->orJsonbLangValueSearch('full_name', $search);
                     });
             })
             ->when($state !== null, fn ($query) => $query->where('state', $state))
             ->when($id, fn ($query) => $query->where('id', $id))
+            // ---- "who can head THIS department" ----
+            // A head is one of the department's own instructors, so the picker
+            // asks for exactly that rather than the whole staff list. Reads
+            // through `instructors.user_id`, the same link that gives an
+            // instructor their departmental scope.
+            ->when($request->input('instructor_of_department_id'), function ($query) use ($request) {
+                $departmentId = (int) $request->input('instructor_of_department_id');
+
+                $query->whereHas(
+                    'instructor',
+                    fn ($instructor) => $instructor->where('department_id', $departmentId)
+                        ->where('is_active', true),
+                );
+            })
             ->orderBy('created_at', 'DESC')
             ->paginate(static::getPerPage());
 

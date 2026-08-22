@@ -95,6 +95,9 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::delete('/delete/{userId}', [UserController::class, 'deleteUser']);
                 Route::put('/change-state/{userId}', [UserController::class, 'changeState']);
                 Route::put('/change-status/{userId}', [UserController::class, 'changeStatus']);
+                // Issues a NEW password and mails it — the old one stops
+                // working, which is the point when credentials went astray.
+                Route::post('/{userId}/resend-password', [UserController::class, 'resendPassword']);
                 Route::get('/{userId}/logs', [UserController::class, 'getUserLogs']);
                 Route::post('/bulk-action', [UserController::class, 'handleBulkAction']);
 
@@ -302,6 +305,9 @@ Route::middleware(API_GUARD_MIDDLEWARE)
         Route::post('/offerings/{id}/reopen', [CourseOfferingController::class, 'reopen']);
         // The four-tier trail: one append-only row per decision, which also
         // moves the offering's status (Final Schema.md Sec. 13).
+        // One decision over many rows — see the controller for why a bulk
+        // run re-checks every per-row rule rather than mass-updating.
+        Route::post('/offerings/bulk-action', [CourseOfferingController::class, 'bulkAction']);
         Route::post('/offerings/{id}/approval', [CourseOfferingController::class, 'recordApproval']);
 
         // Class scheduling. No /{id}/state route: `state` is the
@@ -318,6 +324,10 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 // a holiday week. Declared before the apiResource so the path
                 // is not swallowed by {id}.
                 Route::post('/class-schedules/bulk', [ClassScheduleController::class, 'bulk']);
+                // Lifecycle decisions (publish / confirm / cancel / delete) over
+                // many meetings. Distinct from `/bulk` above, which does bulk
+                // EDITS — shifting days, swapping rooms.
+                Route::post('/class-schedules/bulk-action', [ClassScheduleController::class, 'bulkAction']);
 
                 Route::apiResource('/class-schedules', ClassScheduleController::class)
                     ->parameters(['class-schedules' => 'id'])
@@ -340,6 +350,7 @@ Route::middleware(API_GUARD_MIDDLEWARE)
                 Route::apiResource('/exam-schedules', ExamScheduleController::class)
                     ->parameters(['exam-schedules' => 'id'])
                     ->where(['id' => '[A-Za-z0-9-]+']);
+                Route::post('/exam-schedules/bulk-action', [ExamScheduleController::class, 'bulkAction']);
                 Route::post('/exam-schedules/{id}/confirm', [ExamScheduleController::class, 'confirm']);
                 Route::post('/exam-schedules/{id}/publish', [ExamScheduleController::class, 'publish']);
                 Route::post('/exam-schedules/{id}/cancel', [ExamScheduleController::class, 'cancel']);

@@ -2,6 +2,7 @@
 
 namespace App\Models\Physical;
 
+use App\Models\Academic\Department;
 use App\Models\Common\Lookup\LookupValue;
 use App\Models\Schedule\ClassSchedule;
 use App\Models\Schedule\ExamSchedule;
@@ -37,6 +38,10 @@ class Room extends ScopedModel {
         'code',
         'name',
         'building_id',
+        // The owning department, or null for a room nobody has been given yet.
+        // Assigned from the DEPARTMENT side (DepartmentService::syncRooms), so
+        // that "these are our rooms" is one decision in one screen.
+        'department_id',
         'floor',
         'room_type_lookup_value_id',
         'capacity',
@@ -53,6 +58,19 @@ class Room extends ScopedModel {
      */
     public function building(): BelongsTo {
         return $this->belongsTo(Building::class);
+    }
+
+    /**
+     * Relationship Department — the room's owner.
+     *
+     * Null means unassigned, which is not the same as "available to everyone":
+     * only the owning department may schedule into a room, so an unassigned
+     * room is scheduled by nobody until somebody is given it.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function department(): BelongsTo {
+        return $this->belongsTo(Department::class);
     }
 
     /**
@@ -121,6 +139,7 @@ class Room extends ScopedModel {
             Field::code(),
             Field::name('name__localized'),
             Field::buildingId()->asInt(),
+            Field::departmentId()->asInt(),
             Field::roomTypeLookupValueId()->asInt(),
             Field::floor()->asInt(),
             Field::capacity()->asInt(),
@@ -131,6 +150,7 @@ class Room extends ScopedModel {
             Field::roomTypeCode('roomType.code'),
             Field::makeResource('room_type', 'roomType', fields: 'idAndNameFields'),
             Field::makeResource('building', fields: 'idAndNameFields'),
+            Field::makeResource('department', fields: 'idAndNameFields'),
             Field::makeResource('campus', fields: 'idAndNameFields'),
             Field::makeResource('created_by', 'user', fields: 'idAndNameFields'),
             Field::createdAt(fn ($data) => $data->created_at->format(DATE_FORMAT)),

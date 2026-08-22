@@ -57,8 +57,8 @@ class InstructorController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->where('employee_no', 'ilike', "%{$search}%")
-                            ->orWhere('email', 'ilike', "%{$search}%")
+                            ->where('employee_no', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
                             ->orWhere(fn ($query) => $query->jsonbLangValueSearch('full_name', $search, true));
                     });
             })

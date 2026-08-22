@@ -37,7 +37,7 @@ class PlacementScorer {
      *
      * @return int
      */
-    public function score(array $weights, int $day, array $slot, Room $room, int $expectedStudents, array $usedDays, Collection $sectionDay): int {
+    public function score(array $weights, int $day, array $slot, ?Room $room, int $expectedStudents, array $usedDays, Collection $sectionDay): int {
         $score = 0;
 
         // Spread: a course meeting twice wants Monday and Thursday, not Monday
@@ -49,9 +49,17 @@ class PlacementScorer {
         // Room fit: prefer the smallest room that still holds the cohort.
         // Scaled by how much of the room is used, so a 40-seat class in a
         // 45-seat room beats the same class in a 300-seat auditorium.
-        $capacity = max(1, (int) $room->capacity);
-        $utilisation = min(1.0, max(0, $expectedStudents) / $capacity);
-        $score += (int) round($weights['room_fit'] * $utilisation);
+        //
+        // `$room` is null when the offering's department owns no rooms: the
+        // meeting is placed on the timetable with its room left blank, so
+        // there is no room to fit and nothing to compare buildings against.
+        // The day and gap preferences still apply, which is what keeps a
+        // roomless week as well spread as any other.
+        if ($room) {
+            $capacity = max(1, (int) $room->capacity);
+            $utilisation = min(1.0, max(0, $expectedStudents) / $capacity);
+            $score += (int) round($weights['room_fit'] * $utilisation);
+        }
 
         if ($sectionDay->isNotEmpty()) {
             // Gaps: a session butting onto one the cohort already has is worth
@@ -61,7 +69,7 @@ class PlacementScorer {
             // Building: moving a cohort across campus between periods is a
             // rejection elsewhere; moving it between buildings is merely
             // unwelcome, so it is priced rather than forbidden.
-            if ($this->sharesBuilding($room, $sectionDay)) {
+            if ($room && $this->sharesBuilding($room, $sectionDay)) {
                 $score += $weights['same_building'];
             }
         }

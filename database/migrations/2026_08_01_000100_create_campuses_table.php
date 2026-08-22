@@ -31,9 +31,17 @@ return new class extends Migration {
             $table->index('is_active');
         });
 
-        // One principal campus among the live rows — a partial unique index is
-        // the only way to say "at most one true" without blocking the false rows.
-        DB::statement('CREATE UNIQUE INDEX campuses_is_main_unique ON campuses (is_main) WHERE is_main = true AND deleted_at IS NULL');
+        // One principal campus among the live rows. MySQL has no partial index,
+        // so the predicate moves into a generated column that is 1 for exactly
+        // the rows the index should police and NULL for every other — and MySQL
+        // treats each NULL in a unique index as distinct, so the false and
+        // soft-deleted rows never collide.
+        DB::statement(
+            'ALTER TABLE campuses'
+            . ' ADD COLUMN is_main_unique_key TINYINT'
+            . ' GENERATED ALWAYS AS (CASE WHEN is_main = 1 AND deleted_at IS NULL THEN 1 ELSE NULL END) STORED'
+        );
+        DB::statement('CREATE UNIQUE INDEX campuses_is_main_unique ON campuses (is_main_unique_key)');
     }
 
     /**
@@ -42,7 +50,6 @@ return new class extends Migration {
      * @return void
      */
     public function down(): void {
-        DB::statement('DROP INDEX IF EXISTS campuses_is_main_unique');
         Schema::dropIfExists(Campus::getTableName());
     }
 };

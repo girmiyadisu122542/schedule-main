@@ -30,6 +30,12 @@ class InstructorService {
 
             $instructor = Instructor::create($this->buildAttributes($data));
 
+            // The portal account is part of creating an instructor, not a
+            // separate errand — see InstructorAccountService for why the link
+            // matters. Inside the transaction: an instructor with a half-made
+            // account is worse than neither.
+            app(InstructorAccountService::class)->provision($instructor, getCurrentLanguage(request()));
+
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
         } catch (\Throwable $exception) {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
@@ -59,6 +65,10 @@ class InstructorService {
 
             $instructor->fill($this->buildAttributes($data, $instructor));
             $instructor->save();
+
+            // Also on update, so an instructor entered before accounts were
+            // automatic picks one up. A no-op when they already have one.
+            app(InstructorAccountService::class)->provision($instructor, getCurrentLanguage(request()));
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
         } catch (\Throwable $exception) {

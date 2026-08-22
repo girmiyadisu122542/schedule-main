@@ -43,18 +43,22 @@ return [
             'synchronous' => null,
         ],
         AppConstant::SCHEDULE_DATABASE_CONNECTION => [
-            'driver' => "pgsql",
+            'driver' => 'mariadb',
             'url' => env('DB_URL'),
+            // AppConstant, never env(): that file is this project's credential
+            // store (which is why it is gitignored), and a blank `DB_PASSWORD=`
+            // line in .env is a set-but-empty value that would silently win.
             'host' => AppConstant::DATABASE_HOST,
             'port' => AppConstant::DATABASE_PORT,
             'database' => AppConstant::SCHEDULE_DATABASE,
             'username' => AppConstant::DATABASE_USERNAME,
             'password' => AppConstant::DATABASE_PASSWORD,
-            'charset' => env('DB_CHARSET', 'utf8'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public',
-            'sslmode' => 'prefer',
+            'strict' => true,
+            'engine' => 'InnoDB',
         ],
         'mariadb' => [
             'driver' => 'mariadb',

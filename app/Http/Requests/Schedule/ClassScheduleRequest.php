@@ -43,13 +43,51 @@ class ClassScheduleRequest extends FormRequest {
             'instructor_id' => ['nullable', 'integer', 'exists:' . Instructor::getTableName() . ',id'],
             'room_id' => ['nullable', 'integer', 'exists:' . Room::getTableName() . ',id'],
             'session_type_lookup_value_id' => ['nullable', 'integer', new LookupValueOfType(SESSION_TYPE, 'invalid_session_type')],
-            'day_of_week' => [
-                'required',
+            // ---- one meeting, or several ----
+            // A course's week is normally more than one sitting — two lectures
+            // and a lab, on different days — so Create takes a LIST of slots
+            // and writes them in one go, rather than making a coordinator
+            // reopen the same dialog four times re-picking the same course,
+            // room and instructor each time.
+            //
+            // The single-slot fields still work on their own, so existing
+            // callers and the drag-to-create path are unaffected: send either
+            // `slots`, or `day_of_week` + the times.
+            'slots' => ['array', 'min:1', 'max:' . ScheduleConstant::MAX_SESSIONS_PER_WEEK],
+            'slots.*.day_of_week' => [
+                'required_with:slots',
                 'integer',
                 'between:' . ScheduleConstant::DAY_MONDAY . ',' . ScheduleConstant::DAY_SUNDAY,
             ],
-            'start_time' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT],
-            'end_time' => ['required', 'date_format:' . ScheduleConstant::TIME_FORMAT, 'after:start_time'],
+            'slots.*.start_time' => ['required_with:slots', 'date_format:' . ScheduleConstant::TIME_FORMAT],
+            'slots.*.end_time' => [
+                'required_with:slots',
+                'date_format:' . ScheduleConstant::TIME_FORMAT,
+                'after:slots.*.start_time',
+            ],
+            // Per-slot overrides. A lecture belongs in a hall and its lab in a
+            // lab, so a single room for the whole batch would not survive
+            // contact with a real timetable. Absent means "use the shared value
+            // above".
+            'slots.*.room_id' => ['nullable', 'integer', 'exists:' . Room::getTableName() . ',id'],
+            'slots.*.instructor_id' => ['nullable', 'integer', 'exists:' . Instructor::getTableName() . ',id'],
+            'slots.*.session_type_lookup_value_id' => [
+                'nullable',
+                'integer',
+                new LookupValueOfType(SESSION_TYPE, 'invalid_session_type'),
+            ],
+
+            'day_of_week' => [
+                'required_without:slots',
+                'integer',
+                'between:' . ScheduleConstant::DAY_MONDAY . ',' . ScheduleConstant::DAY_SUNDAY,
+            ],
+            'start_time' => ['required_without:slots', 'date_format:' . ScheduleConstant::TIME_FORMAT],
+            'end_time' => [
+                'required_without:slots',
+                'date_format:' . ScheduleConstant::TIME_FORMAT,
+                'after:start_time',
+            ],
         ];
     }
 

@@ -47,9 +47,12 @@ return new class extends Migration {
         DB::statement('ALTER TABLE rooms ADD CONSTRAINT rooms_exam_capacity_check CHECK (exam_capacity IS NULL OR exam_capacity > 0)');
 
         // Room search: "an active lecture hall seating at least 60".
-        DB::statement('CREATE INDEX rooms_type_capacity_active_index ON rooms (room_type_lookup_value_id, capacity) WHERE is_active = true');
+        // These were partial indexes on PostgreSQL. MySQL has no index
+        // predicate, so `is_active` becomes the leading index column instead —
+        // the same queries still resolve against it, the index is just wider.
+        DB::statement('CREATE INDEX rooms_type_capacity_active_index ON rooms (is_active, room_type_lookup_value_id, capacity)');
         // Exam venue search: "an active exam venue seating at least 40 spaced".
-        DB::statement('CREATE INDEX rooms_exam_venue_capacity_active_index ON rooms (is_exam_venue, exam_capacity) WHERE is_active = true');
+        DB::statement('CREATE INDEX rooms_exam_venue_capacity_active_index ON rooms (is_active, is_exam_venue, exam_capacity)');
     }
 
     /**
@@ -58,8 +61,6 @@ return new class extends Migration {
      * @return void
      */
     public function down(): void {
-        DB::statement('DROP INDEX IF EXISTS rooms_exam_venue_capacity_active_index');
-        DB::statement('DROP INDEX IF EXISTS rooms_type_capacity_active_index');
         Schema::dropIfExists(Room::getTableName());
     }
 };

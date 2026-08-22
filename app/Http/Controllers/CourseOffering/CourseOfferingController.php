@@ -14,6 +14,8 @@ use App\Services\Offering\CourseOfferingService;
 use App\Services\Offering\OfferingApprovalService;
 use App\Support\Import\ColumnMap\AbstractColumnMap;
 use App\Support\Import\ColumnMap\OfferingColumnMap;
+use App\Http\Requests\CourseOffering\OfferingBulkActionRequest;
+use App\Services\Common\BulkActionRunner;
 use Helper\Response\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -106,7 +108,7 @@ class CourseOfferingController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->whereHas('course', fn ($query) => $query->where('code', 'ilike', "%{$search}%"))
+                            ->whereHas('course', fn ($query) => $query->where('code', 'like', "%{$search}%"))
                             // AND, not OR, INSIDE the whereHas callback. The
                             // third argument to `jsonbLangValueSearch` emits
                             // `orWhereRaw`, which here ORs against the
@@ -367,6 +369,92 @@ class CourseOfferingController extends Controller {
      *
      * @return \Illuminate\Http\JsonResponse
      */
+    /**
+     * One decision over many offerings: an approval verdict, a submit, or a
+     * reopen.
+     *
+     * Approval is the reason this exists — a registrar clearing a term's
+     * offerings one dialog at a time is the single most repetitive act in the
+     * system. It is also the one that most needs its per-row rules kept, so
+     * every row is put through exactly what {@see self::recordApproval()} does:
+     *
+     *   - WHICH tier is due is read off each offering's own status, never from
+     *     the request, so a batch cannot grant a tier the caller does not hold;
+     *   - the tier's permission and departmental scope are checked per row;
+     *   - the decision itself still goes through OfferingApprovalService.
+     *
+     * An offering at a different stage than the rest is therefore refused
+     * individually and named in the response, rather than quietly taking a
+     * decision nobody was entitled to make.
+     *
+     * @param \App\Http\Requests\CourseOffering\OfferingBulkActionRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function bulkAction(OfferingBulkActionRequest $request): JsonResponse {
+        $action = $request->input('action');
+        $decisionId = $request->input('decision_lookup_value_id');
+        $remark = $request->input('remark');
+
+        $permitted = match ($action) {
+            'submit' => $this->userCanSubmitCourseOffering(),
+            'reopen' => $this->userCanReopenCourseOffering(),
+            // The approval permission is per-TIER and therefore per-row; it
+            // cannot be settled here, only inside the loop.
+            'approve' => true,
+            default => false,
+        };
+
+        if (!$permitted) {
+            return Response::_403();
+        }
+
+        $approvalService = app(OfferingApprovalService::class);
+        $offeringService = app(CourseOfferingService::class);
+
+        $outcome = BulkActionRunner::run(
+            $request->input('offering_ids', []),
+            fn ($id) => CourseOffering::with(['status', 'course', 'section.program'])->find($id),
+            function (CourseOffering $offering) use ($action, $approvalService, $offeringService, $decisionId, $remark) {
+                if ($action === 'submit') {
+                    return $this->scopeAllowsAuthoringOffering($offering)
+                        ? $offeringService->submitOffering($offering)
+                        : 'offering_department_out_of_scope';
+                }
+
+                if ($action === 'reopen') {
+                    return $this->scopeAllowsAuthoringOffering($offering)
+                        ? $offeringService->reopen($offering)
+                        : 'offering_department_out_of_scope';
+                }
+
+                // ---- approval ----
+                $dueLevel = OfferingApprovalService::dueLevelForStatus($offering->status?->code);
+                if (!$dueLevel) {
+                    return 'offering_is_not_awaiting_a_decision';
+                }
+
+                $permissionKey = PERMISSION_BY_APPROVAL_LEVEL[$dueLevel] ?? null;
+                if (!$permissionKey || !$this->userCan($permissionKey) || !$this->scopeAllowsTier($dueLevel, $offering)) {
+                    return 'not_entitled_to_decide_this_tier';
+                }
+
+                return $approvalService->record($offering, [
+                    'decision_lookup_value_id' => $decisionId,
+                    'remark' => $remark,
+                ]);
+            },
+            fn (CourseOffering $offering) => $offering->displayLabel(),
+        );
+
+        return Response::_200([
+            'data' => $outcome,
+            'message' => Message::get('bulk_action_completed', [
+                'succeeded' => $outcome['succeeded'],
+                'failed' => count($outcome['failed']),
+            ]),
+        ]);
+    }
+
     public function recordApproval(RecordApprovalRequest $request, $id): JsonResponse {
         $offering = CourseOffering::with(['status', 'course', 'section.program'])->find($id);
         if (!$offering) {

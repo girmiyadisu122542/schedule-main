@@ -31,8 +31,13 @@ return new class extends Migration {
 
             // Cascade: a submission is meaningless without the department share
             // it answers.
+            // The constraint is named explicitly: the generated name would be
+            // 67 characters and MySQL rejects an identifier over 64.
             $table->foreignId('invigilation_request_department_id')
-                ->constrained(InvigilationRequestDepartment::getTableName())
+                ->constrained(
+                    table: InvigilationRequestDepartment::getTableName(),
+                    indexName: 'invigilation_submissions_request_dept_foreign',
+                )
                 ->restrictOnUpdate()
                 ->cascadeOnDelete();
             $table->foreignId('instructor_id')->constrained(Instructor::getTableName())->restrictOnUpdate()->restrictOnDelete();

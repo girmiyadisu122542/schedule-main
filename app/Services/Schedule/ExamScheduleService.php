@@ -62,6 +62,15 @@ class ExamScheduleService {
             $attributes['state'] = STATE_ACTIVE;
             $attributes['created_by_id'] = Auth::id();
 
+            // Inside the transaction, before the write: the guard's locking read
+            // only holds the slot for as long as this transaction does.
+            $conflict = ScheduleConflictGuard::examSchedule($attributes);
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
             $schedule = ExamSchedule::create($attributes);
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
@@ -112,6 +121,18 @@ class ExamScheduleService {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
             $schedule->fill($this->buildAttributes($offering, $data));
+
+            // Only a live row was ever policed by the EXCLUDE constraints, and
+            // the sitting being moved must not clash with itself.
+            $conflict = (int) $schedule->state === STATE_ACTIVE
+                ? ScheduleConflictGuard::examSchedule($schedule->getAttributes(), $schedule->id)
+                : null;
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
             $schedule->save();
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
@@ -318,6 +339,12 @@ class ExamScheduleService {
 
             if (!$room->is_exam_venue) {
                 return 'room_is_not_an_exam_venue';
+            }
+
+            // Exams obey the same ownership rule as classes: a department sits
+            // its papers in its own halls.
+            if ((int) $room->department_id !== (int) $offering->department_id) {
+                return 'room_is_not_owned_by_department';
             }
 
             // Spaced seating, not teaching capacity — a hall that seats 60 for a

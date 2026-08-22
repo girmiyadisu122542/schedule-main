@@ -118,6 +118,22 @@ class ScheduleSnapshotService {
             try {
                 DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
+                // The replay used to be policed by the EXCLUDE constraints
+                // themselves; MySQL cannot express them, so the guard decides
+                // whether the world has moved on since the snapshot was taken.
+                $conflict = $isExam
+                    ? ScheduleConflictGuard::examSchedule($attributes)
+                    : ScheduleConflictGuard::classSchedule($attributes);
+
+                if ($conflict !== null) {
+                    DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                    $rejected++;
+                    $reasons[$conflict] = true;
+
+                    continue;
+                }
+
                 $isExam ? ExamSchedule::create($attributes) : ClassSchedule::create($attributes);
 
                 DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();

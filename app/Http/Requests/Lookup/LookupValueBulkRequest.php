@@ -42,7 +42,7 @@ class LookupValueBulkRequest extends FormRequest {
                     if ($lookupTypeId) {
                         $exists = LookupValue::query()
                             ->where('lookup_type_id', $lookupTypeId)
-                            ->whereRaw("LOWER(name->>?) = LOWER(?)", [$language, $val])
+                            ->jsonbLangExactValue('name', $language, $val)
                             ->exists();
 
                         if ($exists) {

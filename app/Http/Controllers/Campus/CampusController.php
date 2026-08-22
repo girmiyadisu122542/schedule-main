@@ -36,8 +36,8 @@ class CampusController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->where('code', 'ilike', "%{$search}%")
-                            ->orWhere('city', 'ilike', "%{$search}%")
+                            ->where('code', 'like', "%{$search}%")
+                            ->orWhere('city', 'like', "%{$search}%")
                             ->orWhere(fn ($query) => $query->jsonbLangValueSearch('name', $search, true));
                     });
             })

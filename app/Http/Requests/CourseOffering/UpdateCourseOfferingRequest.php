@@ -4,6 +4,8 @@ namespace App\Http\Requests\CourseOffering;
 
 use App\Models\Offering\CourseOffering;
 use Helper\Permission\PermissionAction;
+use Illuminate\Auth\Access\AuthorizationException;
+use Translation\Message;
 
 /**
  * Same payload as create — the difference is the permission gate, and that the
@@ -34,4 +36,22 @@ class UpdateCourseOfferingRequest extends StoreCourseOfferingRequest {
         return $this->scopeAllowsAuthoring($currentDepartmentId ? (int) $currentDepartmentId : null)
             && $this->scopeAllowsAuthoring($this->integerOrNull('department_id'));
     }
+
+    /**
+     * Say WHICH of the two checks refused — see the note on the store request.
+     * A missing permission and an out-of-scope department are different
+     * problems with different fixes, and one sentence for both hides that.
+     *
+     * @return void
+     *
+     * @throws \Illuminate\Auth\Access\AuthorizationException
+     */
+    protected function failedAuthorization(): void {
+        throw new AuthorizationException(
+            $this->userCanUpdateCourseOffering()
+                ? Message::get('offering_department_out_of_scope')
+                : Message::get('unauthorized_action')
+        );
+    }
+
 }

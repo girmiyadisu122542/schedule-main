@@ -31,9 +31,16 @@ return new class extends Migration {
 
         DB::statement('ALTER TABLE academic_years ADD CONSTRAINT academic_years_dates_check CHECK (end_date > start_date)');
 
-        // Exactly one current year — a partial unique index is the only way to
-        // say "at most one true" without also blocking the false rows.
-        DB::statement('CREATE UNIQUE INDEX academic_years_is_current_unique ON academic_years (is_current) WHERE is_current = true');
+        // Exactly one current year. MySQL has no partial index, so the "only the
+        // true rows" predicate lives in a generated column that is 1 for a
+        // current year and NULL otherwise — NULLs never collide in a unique
+        // index, so the false rows stay unconstrained.
+        DB::statement(
+            'ALTER TABLE academic_years'
+            . ' ADD COLUMN is_current_unique_key TINYINT'
+            . ' GENERATED ALWAYS AS (CASE WHEN is_current = 1 THEN 1 ELSE NULL END) STORED'
+        );
+        DB::statement('CREATE UNIQUE INDEX academic_years_is_current_unique ON academic_years (is_current_unique_key)');
     }
 
     /**
@@ -42,7 +49,6 @@ return new class extends Migration {
      * @return void
      */
     public function down(): void {
-        DB::statement('DROP INDEX IF EXISTS academic_years_is_current_unique');
         Schema::dropIfExists(AcademicYear::getTableName());
     }
 };

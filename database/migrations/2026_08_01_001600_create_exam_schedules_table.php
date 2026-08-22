@@ -89,6 +89,11 @@ return new class extends Migration {
             $table->index(['semester_id', 'exam_date', 'start_time']);
             $table->index(['room_id', 'exam_date']);
             $table->index(['semester_id', 'status_lookup_value_id']);
+
+            // New for the MySQL port — the section clash check in
+            // ScheduleConflictGuard, which the dropped EXCLUDE constraint used
+            // to serve with its own index.
+            $table->index(['section_id', 'exam_date']);
         });
 
         // Composite FKs — the mirrored semester_id / section_id cannot drift
@@ -108,36 +113,22 @@ return new class extends Migration {
 
         // Helper unique — the target `exam_invigilator_assignments` points its
         // composite FK at (step 15), so an assignment's mirrored date and times
-        // can never drift from the sitting's own. It must be a real UNIQUE
-        // CONSTRAINT: a composite FK cannot reference a plain index.
+        // can never drift from the sitting's own. InnoDB requires the
+        // referenced columns to carry a unique index for the reference to be
+        // one-to-one.
         DB::statement('ALTER TABLE exam_schedules ADD CONSTRAINT exam_schedules_id_window_unique UNIQUE (id, exam_date, start_time, end_time)');
 
         DB::statement('ALTER TABLE exam_schedules ADD CONSTRAINT exam_schedules_time_check CHECK (end_time > start_time)');
         DB::statement('ALTER TABLE exam_schedules ADD CONSTRAINT exam_schedules_required_invigilators_check CHECK (required_invigilators >= 1)');
 
         // ---- the conflict engine ----
-        // Exams overlap on a tsrange built from the date and the times: two
-        // sittings on different days never conflict, however close their clock
-        // times are.
-        $active = STATE_ACTIVE;
-
-        DB::statement(<<<SQL
-            ALTER TABLE exam_schedules
-            ADD CONSTRAINT es_no_room_clash
-            EXCLUDE USING gist (
-                room_id WITH =,
-                tsrange(exam_date + start_time, exam_date + end_time) WITH &&
-            ) WHERE (state = {$active} AND room_id IS NOT NULL)
-        SQL);
-
-        DB::statement(<<<SQL
-            ALTER TABLE exam_schedules
-            ADD CONSTRAINT es_no_section_clash
-            EXCLUDE USING gist (
-                section_id WITH =,
-                tsrange(exam_date + start_time, exam_date + end_time) WITH &&
-            ) WHERE (state = {$active} AND section_id IS NOT NULL)
-        SQL);
+        // Two GiST EXCLUDE constraints on PostgreSQL, overlapping on a tsrange
+        // built from the date and the times so that two sittings on different
+        // days never conflict however close their clock times are. MySQL has
+        // neither EXCLUDE nor range types, so ExamScheduleService enforces the
+        // same two rules through ScheduleConflictGuard inside its write
+        // transaction; the guard compares (exam_date, start_time, end_time)
+        // directly, which gives the same "same day and overlapping" answer.
     }
 
     /**

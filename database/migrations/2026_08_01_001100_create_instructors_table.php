@@ -46,9 +46,11 @@ return new class extends Migration {
 
         DB::statement('ALTER TABLE instructors ADD CONSTRAINT instructors_max_weekly_hours_check CHECK (max_weekly_hours IS NULL OR max_weekly_hours > 0)');
 
-        // Assignable teachers, and the invigilator pool.
-        DB::statement('CREATE INDEX instructors_department_can_teach_active_index ON instructors (department_id, can_teach) WHERE is_active = true');
-        DB::statement('CREATE INDEX instructors_department_can_invigilate_active_index ON instructors (department_id, can_invigilate) WHERE is_active = true');
+        // Assignable teachers, and the invigilator pool. Partial indexes on
+        // PostgreSQL; MySQL has no index predicate, so `is_active` leads the
+        // index instead of filtering it.
+        DB::statement('CREATE INDEX instructors_department_can_teach_active_index ON instructors (is_active, department_id, can_teach)');
+        DB::statement('CREATE INDEX instructors_department_can_invigilate_active_index ON instructors (is_active, department_id, can_invigilate)');
     }
 
     /**
@@ -57,8 +59,6 @@ return new class extends Migration {
      * @return void
      */
     public function down(): void {
-        DB::statement('DROP INDEX IF EXISTS instructors_department_can_invigilate_active_index');
-        DB::statement('DROP INDEX IF EXISTS instructors_department_can_teach_active_index');
         Schema::dropIfExists(Instructor::getTableName());
     }
 };

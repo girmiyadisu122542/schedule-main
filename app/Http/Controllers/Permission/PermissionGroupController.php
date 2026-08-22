@@ -36,6 +36,20 @@ class PermissionGroupController extends Controller {
             $query->jsonbLangValueSearch('name', $request->search);
         }
 
+        // ---- tree navigation ----
+        // Permission groups are a tree (`permission_group_id` -> parent), and
+        // the user-permission screen walks it a level at a time: the roots
+        // first, then one node's children when it is expanded.
+        //
+        // Both filters are opt-in. Without either the endpoint still returns
+        // the flat list the permission-management screen reads, so adding tree
+        // support here changes nothing for the callers that already work.
+        if ($request->boolean('only_root')) {
+            $query->whereNull('permission_group_id');
+        } elseif ($request->filled('parent_id')) {
+            $query->where('permission_group_id', (int) $request->input('parent_id'));
+        }
+
         $permissionGroups = $query->paginate(static::getPerPage($limit));
 
         return Response::_200([

@@ -191,7 +191,19 @@ class ScheduleBulkService {
         try {
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->beginTransaction();
 
-            $schedule->forceFill($changes)->save();
+            $schedule->forceFill($changes);
+
+            // The EXCLUDE constraints used to catch a moved row landing on a
+            // taken slot; MySQL cannot express them, so the guard does. The row
+            // must not clash with where it is currently sitting.
+            $conflict = ScheduleConflictGuard::classSchedule($schedule->getAttributes(), $schedule->id);
+            if ($conflict !== null) {
+                DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->rollBack();
+
+                return $conflict;
+            }
+
+            $schedule->save();
 
             DB::connection(AppConstant::SCHEDULE_DATABASE_CONNECTION)->commit();
         } catch (QueryException $exception) {

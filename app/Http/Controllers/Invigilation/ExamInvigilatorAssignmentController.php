@@ -54,9 +54,9 @@ class ExamInvigilatorAssignmentController extends Controller {
                 $query
                     ->where(function ($query) use ($search) {
                         $query
-                            ->whereHas('instructor', fn ($query) => $query->where('employee_no', 'ilike', "%{$search}%"))
+                            ->whereHas('instructor', fn ($query) => $query->where('employee_no', 'like', "%{$search}%"))
                             ->orWhereHas('instructor', fn ($query) => $query->jsonbLangValueSearch('full_name', $search, true))
-                            ->orWhereHas('examSchedule.courseOffering.course', fn ($query) => $query->where('code', 'ilike', "%{$search}%"));
+                            ->orWhereHas('examSchedule.courseOffering.course', fn ($query) => $query->where('code', 'like', "%{$search}%"));
                     });
             })
             ->when($request->input('exam_schedule_id'), fn ($query) => $query->where('exam_schedule_id', (int) $request->input('exam_schedule_id')))

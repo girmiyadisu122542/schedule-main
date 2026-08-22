@@ -89,6 +89,15 @@ define('USER_STATES', [USER_STATE_ACTIVE, USER_STATE_INACTIVE]);
 // Name of the Super Admin system role (subscription bypass + global scope).
 define('SUPER_ADMIN_ROLE_NAME', 'Super Admin');
 
+/**
+ * The role an instructor's portal account is created with.
+ *
+ * An account with no role is an account that logs in to a 403 on every screen,
+ * so a provisioned instructor is given the teaching role straight away. Matched
+ * on the English name, which is how RoleSeeder identifies every role.
+ */
+define('DEFAULT_INSTRUCTOR_ROLE_NAME', 'Teacher');
+
 define('LOGIN_LOCK_TIMEOUT', 600); // Login Lock Timeout in Seconds
 define('MAXIMUM_LOGIN_ATTEMPT', 10); // Maximum Login Attempt
 
